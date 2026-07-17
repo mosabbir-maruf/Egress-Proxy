@@ -7,7 +7,7 @@
     "start": "node egress-proxy.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "author": "Mosabbir Maruf <96982516+mosabbir-maruf@users.noreply.github.com>",
   "homepage": "https://github.com/mosabbir-maruf",

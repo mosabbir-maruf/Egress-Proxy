@@ -84,11 +84,17 @@ const HTML_PAGE = `<!DOCTYPE html>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
+      --bg: #f7f5f1; --surface: #eeebe6; --border: #d4d0c8; --border2: #bfbab0;
+      --fg: #1c1a16; --fg2: #5c5850; --fg3: #9a958c;
+      --amber: #a06c0c; --amber-d: rgba(160,108,12,0.1); --amber-b: rgba(160,108,12,0.18);
+      --green: #1f7a44; --green-d: rgba(31,122,68,0.1);
+      --mono: 'Geist Mono', 'JetBrains Mono', monospace;
+    }
+    .dark {
       --bg: #0c0b09; --surface: #131210; --border: #252320; --border2: #302e2b;
       --fg: #e8e4dc; --fg2: #b5afae; --fg3: #7a7670;
       --amber: #e8a020; --amber-d: rgba(232,160,32,0.08); --amber-b: rgba(232,160,32,0.18);
-      --green: #3dba6e; --green-d: rgba(61,186,110,0.1); --blue: #4a8fe0; --blue-d: rgba(74,143,224,0.1);
-      --mono: 'Geist Mono', 'JetBrains Mono', monospace;
+      --green: #3dba6e; --green-d: rgba(61,186,110,0.1);
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;transition:background .2s,color .2s,border-color .2s}
     body{font-family:'Geist','Inter',system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -164,8 +170,12 @@ const HTML_PAGE = `<!DOCTYPE html>
     </div>
     <div class="topbar-right">
       <span class="clock" id="clock">--:--:-- UTC</span>
+      <button id="theme-btn" class="nav-link" style="background:none;border:none;cursor:pointer;padding:0;display:inline-flex;align-items:center" aria-label="Toggle theme">
+        <svg class="theme-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="theme-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
       <a href="/health" class="nav-link">health</a>
-      <a href="https://github.com/mosabbir-maruf/nitro-egress" target="_blank" rel="noopener" class="nav-link" aria-label="GitHub repo"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a>
+      <a href="https://github.com/mosabbir-maruf/Egress-Proxy" target="_blank" rel="noopener" class="nav-link" aria-label="GitHub repo"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a>
     </div>
   </div>
   <div class="main">
@@ -236,11 +246,12 @@ const HTML_PAGE = `<!DOCTYPE html>
       </div>
     </section>
     <footer class="foot">
-      <span class="foot-copy">&copy; 2026 <a href="https://github.com/mosabbir-maruf/" target="_blank" rel="noopener">Mosabbir Maruf</a> · <a href="https://github.com/mosabbir-maruf/nitro-egress" target="_blank" rel="noopener">nitro-egress</a></span>
+      <span class="foot-copy">&copy; 2026 <a href="https://github.com/mosabbir-maruf/" target="_blank" rel="noopener">Mosabbir Maruf</a> · <a href="https://github.com/mosabbir-maruf/Egress-Proxy" target="_blank" rel="noopener">Egress-Proxy</a></span>
     </footer>
   </div>
   <script>
     (()=>{const p=v=>String(v).padStart(2,'0');function tick(){const n=new Date();document.getElementById('clock').textContent=p(n.getUTCHours())+':'+p(n.getUTCMinutes())+':'+p(n.getUTCSeconds())+' UTC'}tick();setInterval(tick,1000)})();
+    (function(){const btn=document.getElementById('theme-btn');if(!btn)return;const key='egress-proxy-theme';const setTheme=d=>{document.documentElement.classList.toggle('dark',d);const s=btn.querySelector('.theme-sun');const m=btn.querySelector('.theme-moon');if(s)s.style.display=d?'':'none';if(m)m.style.display=d?'none':'';try{localStorage.setItem(key,d?'dark':'light')}catch(e){}};let saved;try{saved=localStorage.getItem(key)}catch(e){};if(saved==='dark'||saved===null)setTheme(true);else if(saved==='light')setTheme(false);btn.addEventListener('click',()=>{setTheme(!document.documentElement.classList.contains('dark'))})})();
   </script>
 </body>
 </html>`;

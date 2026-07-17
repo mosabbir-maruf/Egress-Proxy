@@ -269,10 +269,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     const isStreaming = "range" in req.headers || RE_STREAMING.test(parsed.pathname);
-    const signal = isStreaming ? AbortSignal.timeout(30_000) : AbortSignal.timeout(10_000);
+    const signal = isStreaming ? undefined : AbortSignal.timeout(10_000);
 
     const upHeaders = forwardHeaders(req.headers, DROP_REQ);
-    upHeaders["Accept-Encoding"] = "identity";
+    if (!isStreaming) upHeaders["Accept-Encoding"] = "identity";
 
     const upstream = await fetch(target, {
       method,

@@ -60,7 +60,8 @@ function isDropped(name, dropSet) {
 
 function forwardHeaders(headers, dropSet) {
   const out = {};
-  for (const [k, v] of headers) {
+  const iter = headers[Symbol.iterator] ? headers : Object.entries(headers);
+  for (const [k, v] of iter) {
     if (!isDropped(k, dropSet)) out[k] = v;
   }
   return out;

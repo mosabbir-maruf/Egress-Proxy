@@ -11,6 +11,8 @@ const ALLOWED_BASE = [
   "itsnitrox.tech",
   "web.nxsha.app",
   "nxsha.app",
+  "ydc1wes.me",
+  "dpdns.org",
 ];
 
 if (PROXY_ALLOWED_EXTRA) {

@@ -216,6 +216,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const reqUrl = new URL(req.url, "http://localhost:" + PORT);
     const pathname = reqUrl.pathname;
+    const method = req.method;
 
     if (pathname === "/health" || pathname === "/healthz") {
       res.writeHead(200, CT_JSON);
@@ -264,7 +265,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const method = req.method;
     let body;
     if (method === "POST" || method === "PUT" || method === "PATCH") {
       body = await readBody(req);

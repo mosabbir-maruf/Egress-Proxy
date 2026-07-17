@@ -1,0 +1,15 @@
+{
+  "name": "egress-proxy",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "egress-proxy.js",
+  "scripts": {
+    "start": "node egress-proxy.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "author": "Mosabbir Maruf <96982516+mosabbir-maruf@users.noreply.github.com>",
+  "homepage": "https://github.com/mosabbir-maruf",
+  "license": "MIT"
+}

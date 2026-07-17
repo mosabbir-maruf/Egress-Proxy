@@ -186,6 +186,15 @@ section{display:flex;flex-direction:column;gap:.625rem}
 <div class="summary-item"><span class="s-label">Timeout</span><span class="s-val">None</span></div>
 </div>
 </section>
+<section>
+<div class="section-label">environment</div>
+<div class="card" style="padding:0">
+<div class="info-grid" style="padding:1.25rem 1.5rem">
+<div class="info-row"><span class="info-label"><code style="font-family:var(--mono);font-size:.72rem;color:var(--fg);background:var(--bg);padding:.1rem .35rem;border-radius:3px;border:1px solid var(--border)">EGRESS_PROXY_KEY</code></span><span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">set</span>' : '<span style="color:var(--fg3)">not set</span>'}</span></div>
+<div class="info-row"><span class="info-label"><code style="font-family:var(--mono);font-size:.72rem;color:var(--fg);background:var(--bg);padding:.1rem .35rem;border-radius:3px;border:1px solid var(--border)">PROXY_ALLOWED_DOMAINS</code></span><span class="info-value"><span style="font-family:var(--mono);font-size:.72rem;color:var(--fg3)">extra domains via csv</span></span></div>
+</div>
+</div>
+</section>
 <footer class="foot">
 <span class="foot-copy">&copy; 2026 <a href="https://github.com/mosabbir-maruf/" target="_blank" rel="noopener">Mosabbir Maruf</a> &middot; <a href="https://github.com/mosabbir-maruf/Egress-Proxy" target="_blank" rel="noopener">Egress-Proxy</a></span>
 </footer>

@@ -13,28 +13,41 @@ process on Heroku that bypasses the block.
 Both manifest and segments route through Heroku — no Cloudflare Workers
 bandwidth limits.
 
-Proxied hosts: `proxy.itsnitrox.tech`, `web.nxsha.app`.
-
 ## File Structure
 
 ```text
 egress-proxy-heroku/
-├── README.md              # This file — setup & run guide
-├── package.json           # Project metadata (ESM)
-├── Procfile               # Heroku process type (web)
+├── .env.example           # Local env reference (key, extra domains)
 ├── .gitignore
-└── egress-proxy.js        # Node.js HTTP proxy (no deps)
+├── Procfile               # Heroku process type (web)
+├── README.md              # This file — setup & run guide
+├── egress-proxy.js        # Node.js HTTP proxy (zero deps, 502 lines)
+├── optimization-report.md # Production audit findings & implementation
+├── package.json           # Project metadata (ESM, Node 22)
+└── test/
+    └── egress-proxy.test.js  # Integration tests (node:test, zero deps)
 ```
 
 ## Environment variables
 
-| Var                     | Default           | Purpose                                                                                  |
-| ----------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
-| `EGRESS_PROXY_KEY`      | _(empty = open)_  | Shared secret. Sent by the Worker as `X-Proxy-Key` (or `?key=`). Required on both sides. |
-| `PROXY_ALLOWED_DOMAINS` | _(see allowlist)_ | Comma-separated extra host suffixes to permit.                                           |
+| Var                              | Default           | Purpose                                                                                  |
+| -------------------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| `EGRESS_PROXY_KEY`               | _(empty = open)_  | Shared secret. Sent by the Worker as `X-Proxy-Key` (or `?key=`). Required on both sides. |
+| `EGRESS_PROXY_HEADER_TIMEOUT_MS` | `15000`           | Max ms to wait for upstream response headers before aborting. Cleared once headers arrive; active streaming has no timeout. |
+| `PROXY_ALLOWED_DOMAINS`          | _(see allowlist)_ | Comma-separated extra host suffixes to permit.                                           |
 
 The built-in allowlist (cannot be removed) covers `itsnitrox.tech`,
-`web.nxsha.app`, `nxsha.app`.
+`web.nxsha.app`, `nxsha.app`, `ydc1wes.me`, `dpdns.org`.
+
+## Testing
+
+```bash
+npm test
+```
+
+Runs the integration test suite via Node's built-in test runner (no
+dependencies). Covers auth, host blocking, redirect validation, header
+sanitization, header timeout, and client-abort propagation.
 
 ## Deploy
 
@@ -85,6 +98,13 @@ curl -sS "https://your-egress-proxy.herokuapp.com/health"
 
 ## Security notes
 
+- **Key comparison** uses `timingSafeEqual` to prevent timing attacks.
+- **Cookie/credential headers** are stripped from forwarded requests
+  (`authorization`, `cookie`, `set-cookie`, `x-api-key`, `x-auth-token`).
+- **Redirects** are followed manually (max 5 hops) with protocol and host
+  validation on every hop — no blind `redirect: "follow"`.
+- **Client disconnect** immediately aborts the upstream fetch via an
+  `AbortController`.
 - If `EGRESS_PROXY_KEY` is unset on **both** sides the proxy runs "open". Fine
   for local testing; set it before production to stop open-proxy abuse.
 - The proxy drops `cf-`, `x-amz-cf-`, `x-amzn-`, `x-forwarded-` (and hop-by-hop

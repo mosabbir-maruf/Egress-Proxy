@@ -4,7 +4,8 @@
   "type": "module",
   "main": "egress-proxy.js",
   "scripts": {
-    "start": "node egress-proxy.js"
+    "start": "node egress-proxy.js",
+    "test": "node --test"
   },
   "engines": {
     "node": "22.x"

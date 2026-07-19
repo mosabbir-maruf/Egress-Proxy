@@ -1,4 +1,4 @@
-# Heroku Egress Proxy
+# Egress Proxy
 
 A Node.js relay for the RelayAPI egress proxy. `proxy.itsnitrox.tech` blocks
 requests from **Cloudflare Workers IPs**. Since the RelayAPI Worker runs on

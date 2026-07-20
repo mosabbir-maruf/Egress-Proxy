@@ -18,6 +18,12 @@ const ALLOWED_BASE = [
   "nxsha.app",
   "ydc1wes.me",
   "dpdns.org",
+  "clarionwellbeing.cfd",
+  "animanga.fun",
+  "lizer123.site",
+  "korso420dim.com",
+  "tripplestream.online",
+  "goodstream.cc",
 ];
 
 if (PROXY_ALLOWED_EXTRA) {

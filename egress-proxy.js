@@ -24,6 +24,7 @@ const ALLOWED_BASE = [
   "korso420dim.com",
   "tripplestream.online",
   "goodstream.cc",
+  "ngclouds.ngclouds.workers.dev",
 ];
 
 if (PROXY_ALLOWED_EXTRA) {

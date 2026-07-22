@@ -162,12 +162,12 @@ client                     Heroku                           doodstream.com / pla
 
 ## 4. Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8700` | HTTP listen port (Heroku sets this automatically) |
-| `EGRESS_PROXY_KEY` | _(empty = open proxy)_ | Shared secret for egress proxy auth. Passed as `X-Proxy-Key` header or `?key=` query param. |
-| `EGRESS_PROXY_HEADER_TIMEOUT_MS` | `15000` | Max milliseconds to wait for upstream response headers before aborting. Cleared once headers arrive; streaming has no timeout. |
-| `PROXY_ALLOWED_DOMAINS` | _(see built-in list)_ | Comma-separated extra host suffixes to permit in egress proxy. |
+| Variable | Default | Applies to | Description |
+|----------|---------|------------|-------------|
+| `PORT` | `8700` | — | HTTP listen port (Heroku sets this automatically) |
+| `EGRESS_PROXY_KEY` | _(empty = open)_ | Both services | Shared secret. Passed as `X-Proxy-Key` header or `?key=` query param. Required on both endpoints when set. |
+| `EGRESS_PROXY_HEADER_TIMEOUT_MS` | `15000` | Egress Proxy only | Max ms to wait for upstream response headers before aborting. Cleared once headers arrive; streaming has no timeout. |
+| `PROXY_ALLOWED_DOMAINS` | _(see built-in list)_ | Egress Proxy only | Comma-separated extra host suffixes to permit. |
 
 ---
 
@@ -219,13 +219,13 @@ propagation, and client-abort cleanup for the egress proxy.
 
 | Measure | Implementation |
 |---------|---------------|
-| Timing-safe auth | `timingSafeEqual` for key comparison |
+| Timing-safe auth | `timingSafeEqual` for key comparison on both endpoints |
 | Credential stripping | `authorization`, `cookie`, `x-api-key`, etc. dropped from forwarded requests |
 | Redirect validation | Manual redirect following (max 5 hops) with protocol + host check on every hop |
 | Client disconnect | `AbortController` aborts upstream fetch immediately on client close |
 | Header timeout | Upstream must respond within `EGRESS_PROXY_HEADER_TIMEOUT_MS` |
 | Body limit | 10 MB max request body (enforced during streaming read) |
-| Closed proxy mode | Set `EGRESS_PROXY_KEY` to prevent open-proxy abuse |
+| Closed proxy mode | Set `EGRESS_PROXY_KEY` to secure both endpoints |
 
 ---
 

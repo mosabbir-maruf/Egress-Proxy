@@ -253,7 +253,7 @@ propagation, and client-abort cleanup for the egress proxy.
 
 > The DoodStream resolver is not included in automated tests — it requires live
 > network access to external hosts (doodstream.com, playmogo.com). Test it
-> manually via the `/resolve` web page or `curl` as shown in [§3.2](#32-doodstream-resolver).
+> manually via the `/resolve` web page or `curl` (see [section 3.2](#32-doodstream-resolver)).
 
 ---
 

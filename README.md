@@ -273,3 +273,6 @@ DoodStream resolver core logic by [sharoon7171](https://github.com/sharoon7171)
 — [doodstream-direct-resolver](https://github.com/sharoon7171/doodstream-direct-resolver).
 pass_md5 handshake, TLS fingerprint, and `buildDirectLink` reverse-engineered
 from that project.
+
+Integration, egress proxy, web interface, and deployment by
+[Mosabbir Maruf](https://github.com/mosabbir-maruf/).

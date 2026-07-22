@@ -1,4 +1,4 @@
-# Heroku Proxy Service
+# Heroku / Koyeb Proxy Service
 
 A single Node.js process hosting two independent services:
 
@@ -7,7 +7,7 @@ A single Node.js process hosting two independent services:
 | **Egress Proxy** | `/?url=<target>` | Relay CDN requests from Cloudflare Workers |
 | **DoodStream Resolver** | `POST /api/resolve` | Resolve video IDs to direct CDN URLs |
 
-Both share the same HTTP server (zero npm dependencies).
+Both share the same HTTP server (zero npm dependencies). Deployable on Heroku or Koyeb.
 
 ---
 
@@ -18,12 +18,13 @@ Both share the same HTTP server (zero npm dependencies).
 - [3. Services](#3-services)
   - [3.1 Egress Proxy](#31-egress-proxy)
   - [3.2 DoodStream Resolver](#32-doodstream-resolver)
-- [4. Environment Variables](#4-environment-variables)
-- [5. Local Development](#5-local-development)
-- [6. Deployment](#6-deployment)
-- [7. Testing](#7-testing)
-- [8. Security](#8-security)
-- [9. Credits](#9-credits)
+- [4. Web Interface](#4-web-interface)
+- [5. Environment Variables](#5-environment-variables)
+- [6. Local Development](#6-local-development)
+- [7. Deployment](#7-deployment)
+- [8. Testing](#8-testing)
+- [9. Security](#9-security)
+- [10. Credits](#10-credits)
 
 ---
 
@@ -31,7 +32,7 @@ Both share the same HTTP server (zero npm dependencies).
 
 ```
 ┌─────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
-│  Caller      │────▶│  Heroku (this service)              │────▶│  Upstream    │
+│  Caller      │────▶│  Heroku / Koyeb (this service)     │────▶│  Upstream    │
 │  (external)  │     │                                     │     │  CDN / API   │
 │              │     │  /?url=       → Egress Proxy        │     │              │
 │              │     │  POST /api/resolve → DoodStream     │     │              │
@@ -47,18 +48,20 @@ the correct handler based on the HTTP method and path.
 
 ```
 egress-proxy-heroku/
-├── Procfile                        # Heroku process definition
-├── package.json                    # ESM, Node 22, zero dependencies
-├── egress-proxy.js                 # HTTP server + route handlers
-├── .env.example                    # Local environment reference
+├── Procfile                          # Heroku process definition
+├── package.json                      # ESM, Node 22, zero dependencies
+├── .node-version                     # Node.js version pin
+├── egress-proxy.js                   # HTTP server + route handlers + HTML templates
+├── .env.example                      # Local environment reference
+├── README.md                         # This file
 ├── test/
-│   └── egress-proxy.test.js        # Integration tests (node:test)
+│   └── egress-proxy.test.js          # Integration tests (node:test)
 └── src/
     ├── doodstream/
-    │   └── resolver.js             # DoodStream pass_md5 handshake
+    │   └── resolver.js               # DoodStream pass_md5 handshake (94 lines)
     └── http/
-        ├── client.js               # Chrome TLS + HTTP/2 client
-        └── browser-headers.js      # Chrome 131 header profiles
+        ├── client.js                 # Chrome TLS + HTTP/2 transport (244 lines)
+        └── browser-headers.js        # Chrome 131 header profiles (36 lines)
 ```
 
 All source files are zero-dependency — only native Node.js modules are used
@@ -76,8 +79,10 @@ Cloudflare Workers that are blocked by upstream CDN IP filters.
 **Request format:**
 
 ```
-GET /?url=<url-encoded-target>&key=<optional-auth-key>
+GET /?url=<url-encoded-target>&key=<auth-key>
 ```
+
+The key may also be sent as the `X-Proxy-Key` header.
 
 **Response:** The upstream response is streamed back as-is (headers + body).
 Status codes, `Content-Type`, `Content-Length`, `Content-Range`, and
@@ -88,7 +93,7 @@ Status codes, `Content-Type`, `Content-Length`, `Content-Range`, and
 ```
 itsnitrox.tech, web.nxsha.app, nxsha.app, ydc1wes.me, dpdns.org,
 clarionwellbeing.cfd, animanga.fun, lizer123.site, korso420dim.com,
-tripplestream.online, goodstream.cc
+tripplestream.online, goodstream.cc, doodstream.com, playmogo.com
 ```
 
 Additional domains can be added via the `PROXY_ALLOWED_DOMAINS` environment
@@ -117,6 +122,7 @@ no JavaScript execution.
 ```bash
 curl -X POST https://your-app.herokuapp.com/api/resolve \
   -H "Content-Type: application/json" \
+  -H "X-Proxy-Key: your-key" \
   -d '{"videoId": "02n3dhf9fvqu"}'
 ```
 
@@ -140,12 +146,13 @@ curl -X POST https://your-app.herokuapp.com/api/resolve \
 | `400` | Embed page could not be loaded or parsed |
 | `400` | Video not found or removed from host |
 | `400` | Token expired or rate limited (retry with fresh request) |
+| `403` | Missing or invalid `X-Proxy-Key` (if `EGRESS_PROXY_KEY` is set) |
 | `502` | CDN verification failed (upstream did not return `200`/`206`) |
 
 **Resolve pipeline:**
 
 ```
-client                     Heroku                           doodstream.com / playmogo.com
+client                     Heroku/Koyeb                     doodstream.com / playmogo.com
   │                          │                                      │
   │── POST /api/resolve ────▶│                                      │
   │                          │── GET /e/{videoId} ─────────────────▶│
@@ -160,50 +167,81 @@ client                     Heroku                           doodstream.com / pla
 
 ---
 
-## 4. Environment Variables
+## 4. Web Interface
+
+Two web pages are served at the root path:
+
+| Path | Description |
+|------|-------------|
+| `/` | Dashboard — shows service status, allowed hosts, environment config |
+| `/resolve` | Resolver test page — input video ID + key, resolve, copy links, play video |
+
+The `/resolve` page includes an HTML5 video player and copy buttons for both
+the direct CDN link and the egress proxy URL. Both pages share the same
+dark/light theme (persisted in localStorage).
+
+---
+
+## 5. Environment Variables
 
 | Variable | Default | Applies to | Description |
 |----------|---------|------------|-------------|
-| `PORT` | `8700` | — | HTTP listen port (Heroku sets this automatically) |
+| `PORT` | `8700` | — | HTTP listen port (Heroku/Koyeb sets this automatically) |
 | `EGRESS_PROXY_KEY` | _(empty = open)_ | Both services | Shared secret. Passed as `X-Proxy-Key` header or `?key=` query param. Required on both endpoints when set. |
-| `EGRESS_PROXY_HEADER_TIMEOUT_MS` | `15000` | Egress Proxy only | Max ms to wait for upstream response headers before aborting. Cleared once headers arrive; streaming has no timeout. |
+| `EGRESS_PROXY_HEADER_TIMEOUT_MS` | `15000` | Egress Proxy only | Max ms to wait for upstream response headers. Cleared once headers arrive. |
 | `PROXY_ALLOWED_DOMAINS` | _(see built-in list)_ | Egress Proxy only | Comma-separated extra host suffixes to permit. |
 
 ---
 
-## 5. Local Development
+## 6. Local Development
 
 ```bash
 # Start server (default port 8700)
 node egress-proxy.js
 
-# Test egress proxy
+# Test health
 curl -sS "http://localhost:8700/health"
 
-# Test doodstream resolver
+# Test doodstream resolver (open mode — no key)
 curl -X POST http://localhost:8700/api/resolve \
   -H "Content-Type: application/json" \
   -d '{"videoId":"02n3dhf9fvqu"}'
+
+# Open web dashboard
+open http://localhost:8700
 ```
 
 ---
 
-## 6. Deployment
+## 7. Deployment
+
+### Heroku
 
 ```bash
 heroku create your-app-name
 git push heroku main
 heroku ps:scale web=1
 
-# (Optional) Set auth key for egress proxy
+# Set auth key
 heroku config:set EGRESS_PROXY_KEY=$(openssl rand -hex 32)
 ```
 
-The `Procfile` defines the process type. Heroku sets `PORT` automatically.
+### Koyeb
+
+1. Push the repository to GitHub
+2. Create a Koyeb app → Deploy from GitHub
+3. Build command: leave blank (zero dependencies)
+4. Start command: `node src/server/index.js` → **use** `node egress-proxy.js`
+5. Port: `8700`
+6. Set `EGRESS_PROXY_KEY` in Koyeb dashboard env vars
+
+> **Note:** The doodstream resolver requires the hosting provider's IP range
+> to not be blocked by Cloudflare. Koyeb works; Heroku does not for this
+> specific endpoint.
 
 ---
 
-## 7. Testing
+## 8. Testing
 
 ```bash
 npm test
@@ -215,7 +253,7 @@ propagation, and client-abort cleanup for the egress proxy.
 
 ---
 
-## 8. Security
+## 9. Security
 
 | Measure | Implementation |
 |---------|---------------|
@@ -229,7 +267,7 @@ propagation, and client-abort cleanup for the egress proxy.
 
 ---
 
-## 9. Credits
+## 10. Credits
 
 DoodStream resolver core logic by [sharoon7171](https://github.com/sharoon7171)
 — [doodstream-direct-resolver](https://github.com/sharoon7171/doodstream-direct-resolver).

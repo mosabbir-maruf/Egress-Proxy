@@ -25,6 +25,8 @@ const ALLOWED_BASE = [
   "korso420dim.com",
   "tripplestream.online",
   "goodstream.cc",
+  "doodstream.com",
+  "playmogo.com",
 ];
 
 if (PROXY_ALLOWED_EXTRA) {

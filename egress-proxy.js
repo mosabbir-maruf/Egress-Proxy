@@ -329,6 +329,8 @@ section{display:flex;flex-direction:column;gap:.625rem}
 </div>
 <div class="topbar-right">
 <span class="clock" id="clock"></span>
+<a href="/resolve" class="nav-link">resolver</a>
+<a href="/health" class="nav-link">health</a>
 <button id="theme-btn" class="nav-link" aria-label="Toggle theme">
 <svg class="theme-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
 <svg class="theme-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -447,7 +449,7 @@ input{font-family:var(--mono);font-size:.78rem}
 <div class="card-inline">
 <input id="vid-input" type="text" placeholder="Video ID (e.g. 02n3dhf9fvqu)" value="02n3dhf9fvqu"
   style="flex:1;min-width:200px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);outline:none">
-<input id="key-input" type="password" placeholder="X-Proxy-Key (optional)"
+<input id="key-input" type="password" placeholder="X-Proxy-Key"
   style="flex:1;min-width:160px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);outline:none;font-size:.7rem">
 <button id="resolve-btn" class="btn">Resolve</button>
 <span id="status-text" style="font-family:var(--mono);font-size:.72rem;color:var(--fg3)"></span>

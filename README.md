@@ -1,43 +1,73 @@
-# Egress Proxy
+# Egress Proxy + DoodStream Resolver
 
-A Node.js relay for the RelayAPI egress proxy. `proxy.itsnitrox.tech` blocks
-requests from **Cloudflare Workers IPs**. Since the RelayAPI Worker runs on
-Cloudflare, blocked hosts are routed through this proxy — a persistent Node.js
-process on Heroku that bypasses the block.
+A combined Node.js service on Heroku:
 
-## Traffic
-
-- **Manifest**: HLS playlist → Heroku proxy → Nitro CDN
-- **Segments**: Video bytes → Heroku proxy → Nitro CDN
-
-Both manifest and segments route through Heroku — no Cloudflare Workers
-bandwidth limits.
+1. **Egress Proxy** — Relay for CDN domains blocked from Cloudflare Workers IPs.
+2. **DoodStream Resolver** — Resolves dood.li / playmogo.com video IDs to direct
+   CDN URLs via Chrome TLS fingerprint (bypasses Cloudflare).
 
 ## File Structure
 
 ```text
 egress-proxy-heroku/
-├── .env.example           # Local env reference (key, extra domains)
+├── .env.example              # Local env reference
 ├── .gitignore
-├── Procfile               # Heroku process type (web)
-├── README.md              # This file — setup & run guide
-├── egress-proxy.js        # Node.js HTTP proxy (zero deps, 502 lines)
-├── optimization-report.md # Production audit findings & implementation
-├── package.json           # Project metadata (ESM, Node 22)
-└── test/
-    └── egress-proxy.test.js  # Integration tests (node:test, zero deps)
+├── Procfile                  # Heroku process type (web)
+├── README.md                 # This file
+├── egress-proxy.js           # HTTP server (zero deps)
+├── package.json              # ESM, Node 22
+├── test/
+│   └── egress-proxy.test.js  # Integration tests
+└── src/
+    ├── doodstream/
+    │   └── resolver.js       # DoodStream embed → CDN URL
+    └── http/
+        ├── client.js         # Chrome TLS + HTTP/2 client
+        └── browser-headers.js# Chrome 131 header profiles
 ```
+
+## Endpoints
+
+### `/?url=<encoded-target>` — Egress Proxy
+
+Forwards requests to allowed CDN domains through Heroku.
+
+### `POST /api/resolve` — DoodStream Resolver
+
+```bash
+curl -X POST https://your-app.herokuapp.com/api/resolve \
+  -H "Content-Type: application/json" \
+  -d '{"videoId": "02n3dhf9fvqu"}'
+```
+
+**Success response:**
+```json
+{
+  "videoId": "02n3dhf9fvqu",
+  "title": "string | null",
+  "directLink": "https://cdn...mp4?token=...&expiry=...",
+  "referer": "https://playmogo.com/",
+  "contentLength": "341841060"
+}
+```
+
+**Errors:**
+| Status | Cause |
+|--------|-------|
+| 400 | Invalid video ID, resolve failure |
+| 502 | CDN verification failed |
+
+### `/health` — Health Check
+
+Returns `{"ok": true}`.
 
 ## Environment variables
 
 | Var                              | Default           | Purpose                                                                                  |
 | -------------------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
-| `EGRESS_PROXY_KEY`               | _(empty = open)_  | Shared secret. Sent by the Worker as `X-Proxy-Key` (or `?key=`). Required on both sides. |
-| `EGRESS_PROXY_HEADER_TIMEOUT_MS` | `15000`           | Max ms to wait for upstream response headers before aborting. Cleared once headers arrive; active streaming has no timeout. |
-| `PROXY_ALLOWED_DOMAINS`          | _(see allowlist)_ | Comma-separated extra host suffixes to permit.                                           |
-
-The built-in allowlist (cannot be removed) covers `itsnitrox.tech`,
-`web.nxsha.app`, `nxsha.app`, `ydc1wes.me`, `dpdns.org`.
+| `EGRESS_PROXY_KEY`               | _(empty = open)_  | Shared secret for proxy endpoint.                                                        |
+| `EGRESS_PROXY_HEADER_TIMEOUT_MS` | `15000`           | Max ms to wait for upstream response headers.                                            |
+| `PROXY_ALLOWED_DOMAINS`          | _(see allowlist)_ | Comma-separated extra host suffixes for proxy.                                           |
 
 ## Testing
 
@@ -45,81 +75,27 @@ The built-in allowlist (cannot be removed) covers `itsnitrox.tech`,
 npm test
 ```
 
-Runs the integration test suite via Node's built-in test runner (no
-dependencies). Covers auth, host blocking, redirect validation, header
-sanitization, header timeout, and client-abort propagation.
-
 ## Deploy
 
 ```bash
-# Create Heroku app
-heroku create your-egress-proxy
-
-# Set auth key
-heroku config:set EGRESS_PROXY_KEY=$(openssl rand -hex 32)
-
-# Deploy
-git init
-git add .
-git commit -m "init"
+heroku create your-app
 git push heroku main
-
-# Scale to a free dyno
 heroku ps:scale web=1
-```
-
-## Configure RelayAPI Worker
-
-Set the Worker secrets:
-
-```bash
-wrangler secret put EGRESS_PROXY_URL
-# Value: https://your-egress-proxy.herokuapp.com/?url=
-
-wrangler secret put EGRESS_PROXY_KEY
-# Value: the same key you set on Heroku
-
-wrangler secret put EGRESS_DOMAINS
-# Value: itsnitrox.tech,web.nxsha.app
-```
-
-## Verify
-
-```bash
-# with key (expect 200):
-curl -sS "https://your-egress-proxy.herokuapp.com/?url=https://proxy.itsnitrox.tech/nitro/test.m3u8&key=YOUR_KEY"
-
-# without key (expect 403 when key is set):
-curl -sS -o /dev/null -w "%{http_code}" "https://your-egress-proxy.herokuapp.com/?url=https://proxy.itsnitrox.tech"
-
-# health check:
-curl -sS "https://your-egress-proxy.herokuapp.com/health"
 ```
 
 ## Security notes
 
 - **Key comparison** uses `timingSafeEqual` to prevent timing attacks.
-- **Cookie/credential headers** are stripped from forwarded requests
-  (`authorization`, `cookie`, `set-cookie`, `x-api-key`, `x-auth-token`).
-- **Redirects** are followed manually (max 5 hops) with protocol and host
-  validation on every hop — no blind `redirect: "follow"`.
-- **Client disconnect** immediately aborts the upstream fetch via an
-  `AbortController`.
-- If `EGRESS_PROXY_KEY` is unset on **both** sides the proxy runs "open". Fine
-  for local testing; set it before production to stop open-proxy abuse.
-- The proxy drops `cf-`, `x-amz-cf-`, `x-amzn-`, `x-forwarded-` (and hop-by-hop
-  headers / `x-proxy-key`) and forces `Accept-Encoding: identity` to avoid
-  relay errors.
+- **Cookie/credential headers** are stripped from forwarded requests.
+- **Redirects** followed manually (max 5 hops) with validation on every hop.
+- **Client disconnect** immediately aborts the upstream fetch via `AbortController`.
 - Only HTTP/HTTPS targets on the allowlist are fetched. Anything else → `403`.
-- No CORS headers are emitted — the Worker calls the proxy server-to-server, so
-  cross-origin browser responses are not needed.
 
-## Request format
+## How the DoodStream resolver works
 
-The Worker calls the proxy as:
-
-```
-https://your-egress-proxy.herokuapp.com/?url=<encoded-target>
-```
-
-The key may be passed as `?key=<secret>` or the `X-Proxy-Key` header.
+1. `GET https://doodstream.com/e/{videoId}` — follows redirect to active mirror
+   (playmogo.com), bypasses Cloudflare via Chrome TLS fingerprint.
+2. Extracts `/pass_md5/{hash}/{token}` path from embed HTML.
+3. `GET {mirror}/pass_md5/{hash}/{token}` — returns CDN prefix URL.
+4. Builds final CDN URL with 10-char random suffix + token + expiry.
+5. Verifies CDN link with `Range: bytes=0-15` HEAD request.

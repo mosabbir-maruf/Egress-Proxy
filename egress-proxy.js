@@ -2,6 +2,7 @@ import http from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { URL } from "node:url";
+import { resolveDirectLink, verifyDirectLink } from "./src/doodstream/resolver.js";
 
 const PORT = Number(process.env.PORT) || 8700;
 const REQUIRED_KEY = process.env.EGRESS_PROXY_KEY || "";
@@ -387,6 +388,33 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/health" || pathname === "/healthz") {
       res.writeHead(200, CT_JSON);
       res.end(JSON_OK);
+      return;
+    }
+
+    if (pathname === "/api/resolve" && method === "POST") {
+      try {
+        const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        const videoId = (body.videoId || "").trim();
+        if (!videoId || !/^[a-z0-9]+$/i.test(videoId)) {
+          sendJson(res, 400, JSON.stringify({ error: "Invalid video ID" }));
+          return;
+        }
+        const result = await resolveDirectLink(videoId);
+        const verification = await verifyDirectLink(result.directLink, result.referer);
+        if (!verification.ok) {
+          sendJson(res, 502, JSON.stringify({ error: "Direct link check failed" }));
+          return;
+        }
+        sendJson(res, 200, JSON.stringify({
+          videoId: result.videoId,
+          title: result.title,
+          directLink: result.directLink,
+          referer: result.referer,
+          contentLength: verification.contentLength,
+        }));
+      } catch (error) {
+        sendJson(res, 400, JSON.stringify({ error: error.message || "Could not resolve direct link" }));
+      }
       return;
     }
 

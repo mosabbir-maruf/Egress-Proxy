@@ -266,6 +266,7 @@ const HTML_PAGE = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>Egress Proxy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <style>
 :root{--bg:#f7f5f1;--surface:#eeebe6;--border:#d4d0c8;--fg:#1c1a16;--fg2:#5c5850;--fg3:#9a958c;--amber:#a06c0c;--green:#1f7a44;--green-d:rgba(31,122,68,0.1);--mono:'Geist Mono','JetBrains Mono',monospace}
 .dark{--bg:#0c0b09;--surface:#131210;--border:#252320;--fg:#e8e4dc;--fg2:#b5afae;--fg3:#7a7670;--amber:#e8a020;--green:#3dba6e;--green-d:rgba(61,186,110,0.1)}
@@ -387,6 +388,7 @@ const RESOLVE_PAGE = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>DoodStream Resolver</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <style>
 :root{--bg:#f7f5f1;--surface:#eeebe6;--border:#d4d0c8;--fg:#1c1a16;--fg2:#5c5850;--fg3:#9a958c;--amber:#a06c0c;--green:#1f7a44;--green-d:rgba(31,122,68,0.1);--mono:'Geist Mono','JetBrains Mono',monospace}
 .dark{--bg:#0c0b09;--surface:#131210;--border:#252320;--fg:#e8e4dc;--fg2:#b5afae;--fg3:#7a7670;--amber:#e8a020;--green:#3dba6e;--green-d:rgba(61,186,110,0.1)}

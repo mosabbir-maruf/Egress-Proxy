@@ -324,7 +324,7 @@ section{display:flex;flex-direction:column;gap:.625rem}
 <body>
 <div class="topbar">
 <div class="topbar-left">
-<div class="wordmark"><span>egress-proxy</span><span class="wordmark-sep">/</span><span>heroku</span></div>
+<div class="wordmark"><a href="/" style="color:inherit;text-decoration:none">egress-proxy</a><span class="wordmark-sep">/</span><span>heroku</span></div>
 <div class="topbar-status"><span class="dot"></span>operational</div>
 </div>
 <div class="topbar-right">
@@ -434,7 +434,7 @@ input{font-family:var(--mono);font-size:.78rem}
 <body>
 <div class="topbar">
 <div class="topbar-left">
-<div class="wordmark"><span>egress-proxy</span><span class="wordmark-sep">/</span><span>doodstream</span></div>
+<div class="wordmark"><a href="/" style="color:inherit;text-decoration:none">egress-proxy</a><span class="wordmark-sep">/</span><span>doodstream</span></div>
 <div class="topbar-status" id="status-dot"><span class="dot"></span>ready</div>
 </div>
 <div class="topbar-right">

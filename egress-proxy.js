@@ -348,6 +348,9 @@ section{display:flex;flex-direction:column;gap:.625rem}
 <div class="info-row"><span class="info-label">Status</span><span class="info-value"><span class="badge">Active</span></span></div>
 <div class="info-row"><span class="info-label">Runtime</span><span class="info-value amber">Persistent process</span></div>
 <div class="info-row"><span class="info-label">Usage</span><span class="info-value">Manifest + segments</span></div>
+<div class="info-row" style="border-top:1px solid var(--border);margin-top:.25rem;padding-top:.75rem"><span class="info-label">Resolver</span><span class="info-value"><span class="badge">POST /api/resolve</span></span></div>
+<div class="info-row"><span class="info-label">Resolve Auth</span><span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">X-Proxy-Key</span>' : '<span class="badge" style="background:rgba(192,57,43,0.1);color:#c0392b;border-color:rgba(192,57,43,0.2)">missing key</span>'}</span></div>
+<div class="info-row"><span class="info-label">Test</span><span class="info-value"><a href="/resolve" class="nav-link" style="font-size:.7rem;text-decoration:underline;color:var(--amber)">/resolve →</a></span></div>
 </div>
 </div>
 <section>
@@ -364,26 +367,6 @@ section{display:flex;flex-direction:column;gap:.625rem}
 <div class="info-grid" style="padding:1.25rem 1.5rem">
 <div class="info-row"><span class="info-label"><code style="font-family:var(--mono);font-size:.72rem;color:var(--fg);background:var(--bg);padding:.1rem .35rem;border-radius:3px;border:1px solid var(--border)">EGRESS_PROXY_KEY</code></span><span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">set</span>' : '<span style="color:var(--fg3)">not set</span>'}</span></div>
 <div class="info-row"><span class="info-label"><code style="font-family:var(--mono);font-size:.72rem;color:var(--fg);background:var(--bg);padding:.1rem .35rem;border-radius:3px;border:1px solid var(--border)">PROXY_ALLOWED_DOMAINS</code></span><span class="info-value"><span style="font-family:var(--mono);font-size:.72rem;color:var(--fg3)">extra domains via csv</span></span></div>
-</div>
-    </div>
-    </section>
-    <section>
-    <div class="section-label">resolver</div>
-    <div class="card" style="padding:1.25rem 1.5rem">
-      <div class="info-grid">
-      <div class="info-row">
-        <span class="info-label">Endpoint</span>
-        <span class="info-value"><span class="badge">POST /api/resolve</span></span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Auth</span>
-        <span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">X-Proxy-Key</span>' : '<span class="badge" style="background:rgba(192,57,43,0.1);color:#c0392b;border-color:rgba(192,57,43,0.2)">missing key</span>'}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Test page</span>
-        <span class="info-value"><a href="/resolve" class="nav-link" style="font-size:.7rem;text-decoration:underline;color:var(--amber)">/resolve →</a></span>
-      </div>
-      </div>
     </div>
     </section>
     <footer class="foot">

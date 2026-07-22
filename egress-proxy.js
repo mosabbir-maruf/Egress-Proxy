@@ -393,6 +393,12 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === "/api/resolve" && method === "POST") {
       try {
+        const headerKey = req.headers["x-proxy-key"];
+        const provided = typeof headerKey === "string" ? headerKey : "";
+        if (REQUIRED_KEY && !hasValidKey(provided)) {
+          sendJson(res, 403, JSON_FORBIDDEN);
+          return;
+        }
         const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
         const videoId = (body.videoId || "").trim();
         if (!videoId || !/^[a-z0-9]+$/i.test(videoId)) {

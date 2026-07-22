@@ -102,5 +102,5 @@ heroku ps:scale web=1
 
 ## Credits
 
-DoodStream resolver adapted from
-[doodstream-direct-resolver](https://github.com/lscofield/node-urlresolver-api).
+DoodStream resolver core logic — pass_md5 handshake, TLS fingerprint, and
+`buildDirectLink` — sourced from the open-source community.

@@ -31,9 +31,9 @@ Both share the same HTTP server (zero npm dependencies).
 
 ```
 ┌─────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
-│  LustHub     │────▶│  Heroku (this service)              │────▶│  Upstream    │
-│  Workers     │     │                                     │     │  CDN / API   │
-│  (client)    │     │  /?url=       → Egress Proxy        │     │              │
+│  Caller      │────▶│  Heroku (this service)              │────▶│  Upstream    │
+│  (external)  │     │                                     │     │  CDN / API   │
+│              │     │  /?url=       → Egress Proxy        │     │              │
 │              │     │  POST /api/resolve → DoodStream     │     │              │
 └─────────────┘     └─────────────────────────────────────┘     └──────────────┘
 ```

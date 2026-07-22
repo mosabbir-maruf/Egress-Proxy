@@ -371,33 +371,16 @@ section{display:flex;flex-direction:column;gap:.625rem}
     <div class="card" style="padding:1.25rem 1.5rem">
       <div class="info-grid">
       <div class="info-row">
-        <span class="info-label">Video ID</span>
-        <div style="display:flex;gap:.5rem;flex:1;max-width:400px">
-        <input id="vid-input" type="text" placeholder="e.g. 02n3dhf9fvqu" value="02n3dhf9fvqu"
-          style="flex:1;padding:.35rem .6rem;font-family:var(--mono);font-size:.78rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);outline:none">
-        <button id="resolve-btn"
-          style="padding:.35rem 1rem;font-family:var(--mono);font-size:.72rem;border:1px solid var(--amber);border-radius:4px;background:var(--amber);color:#fff;cursor:pointer;white-space:nowrap">Resolve</button>
-        </div>
+        <span class="info-label">Endpoint</span>
+        <span class="info-value"><span class="badge">POST /api/resolve</span></span>
       </div>
-      <div class="info-row" id="resolve-status-row" style="display:none">
-        <span class="info-label">Status</span>
-        <span id="resolve-status" class="info-value"></span>
+      <div class="info-row">
+        <span class="info-label">Auth</span>
+        <span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">X-Proxy-Key</span>' : '<span style="color:var(--fg3)">open</span>'}</span>
       </div>
-      <div class="info-row" id="resolve-link-row" style="display:none">
-        <span class="info-label">Direct Link</span>
-        <span id="resolve-link" class="info-value" style="font-size:.7rem;word-break:break-all"></span>
-      </div>
-      <div class="info-row" id="resolve-length-row" style="display:none">
-        <span class="info-label">Size</span>
-        <span id="resolve-length" class="info-value"></span>
-      </div>
-      <div class="info-row" id="resolve-referer-row" style="display:none">
-        <span class="info-label">Referer</span>
-        <span id="resolve-referer" class="info-value" style="font-size:.7rem"></span>
-      </div>
-      <div class="info-row" id="resolve-error-row" style="display:none">
-        <span class="info-label">Error</span>
-        <span id="resolve-error" class="info-value amber"></span>
+      <div class="info-row">
+        <span class="info-label">Test page</span>
+        <span class="info-value"><a href="/resolve" target="_blank" class="nav-link" style="font-size:.7rem;text-decoration:underline;color:var(--amber)">/resolve →</a></span>
       </div>
       </div>
     </div>
@@ -408,40 +391,7 @@ section{display:flex;flex-direction:column;gap:.625rem}
     </div>
     <script>
     (function(){var p=String.prototype.padStart.bind;function t(){var n=new Date();document.getElementById("clock").textContent=(n.getUTCHours()<10?"0":"")+n.getUTCHours()+":"+(n.getUTCMinutes()<10?"0":"")+n.getUTCMinutes()+":"+(n.getUTCSeconds()<10?"0":"")+n.getUTCSeconds()+" UTC"}t();setInterval(t,1e3)})();
-    (function(){var b=document.getElementById("theme-btn");if(!b)return;var k="egress-proxy-theme";function s(d){document.documentElement.classList.toggle("dark",d);var u=b.querySelector(".theme-sun"),m=b.querySelector(".theme-moon");if(u)u.style.display=d?"none":"";if(m)m.style.display=d?"":"none";try{localStorage.setItem(k,d?"dark":"light")}catch(e){}}var v;try{v=localStorage.getItem(k)}catch(e){};if(v==="dark"||v===null)s(true);else if(v==="light")s(false);b.addEventListener("click",function(){s(!document.documentElement.classList.contains("dark"))})})();
-    (function(){
-    var btn=document.getElementById("resolve-btn"),inp=document.getElementById("vid-input");
-    if(!btn||!inp)return;
-    function $(id){return document.getElementById(id)}
-    function h(id){$(id).style.display=""}
-    function v(id,t){$(id).textContent=t}
-    function run(){
-      var id=inp.value.trim();
-      if(!id)return;
-      ["resolve-status","resolve-link","resolve-length","resolve-referer","resolve-error"].forEach(function(k){$(k).textContent=""});
-      ["resolve-status-row","resolve-link-row","resolve-length-row","resolve-referer-row","resolve-error-row"].forEach(function(k){$(k).style.display="none"});
-      btn.disabled=true;btn.textContent="...";
-      var key="${REQUIRED_KEY}";
-      var headers={"Content-Type":"application/json"};
-      if(key)headers["X-Proxy-Key"]=key;
-      fetch("/api/resolve",{method:"POST",headers:headers,body:JSON.stringify({videoId:id})})
-      .then(function(r){return r.json()})
-      .then(function(d){
-        if(d.directLink){
-          h("resolve-status-row");v("resolve-status","<span class=badge>ok</span>");
-          h("resolve-link-row");v("resolve-link",d.directLink);
-          h("resolve-length-row");v("resolve-length",(d.contentLength/1048576).toFixed(1)+" MB");
-          h("resolve-referer-row");v("resolve-referer",d.referer);
-        }else{
-          h("resolve-error-row");v("resolve-error",d.error||"unknown");
-        }
-      })
-      .catch(function(e){h("resolve-error-row");v("resolve-error",e.message)})
-      .finally(function(){btn.disabled=false;btn.textContent="Resolve"});
-    }
-    btn.addEventListener("click",run);
-    inp.addEventListener("keydown",function(e){if(e.key==="Enter")run()});
-    })();
+    (function(){var b=document.getElementById("theme-btn");if(!b)return;var k="egress-proxy-theme";function s(d){document.documentElement.classList.toggle("dark",d);var u=b.querySelector(".theme-sun"),m=b.querySelector(".theme-moon");if(u)u.style.display=d?"none":"";if(m)m.style.display=d?"":"none";try{localStorage.setItem(k,d?"dark":"light")}catch(e){}}var v;try{v=localStorage.getItem(k)}catch(e){};if(v==="dark"||v===null)s(true);else if(v==="light")s(false);b.addEventListener("click",function(){s(!document.documentElement.classList.contains("dark"))})    })();
     </script>
 </body>
 </html>`;

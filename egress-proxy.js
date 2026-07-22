@@ -376,7 +376,7 @@ section{display:flex;flex-direction:column;gap:.625rem}
       </div>
       <div class="info-row">
         <span class="info-label">Auth</span>
-        <span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">X-Proxy-Key</span>' : '<span style="color:var(--fg3)">open</span>'}</span>
+        <span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">X-Proxy-Key</span>' : '<span class="badge" style="background:rgba(192,57,43,0.1);color:#c0392b;border-color:rgba(192,57,43,0.2)">missing key</span>'}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Test page</span>
@@ -461,6 +461,8 @@ input{font-family:var(--mono);font-size:.78rem}
 <div class="card-inline">
 <input id="vid-input" type="text" placeholder="Video ID (e.g. 02n3dhf9fvqu)" value="02n3dhf9fvqu"
   style="flex:1;min-width:200px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);outline:none">
+<input id="key-input" type="password" placeholder="X-Proxy-Key (optional)"
+  style="flex:1;min-width:160px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);outline:none;font-size:.7rem">
 <button id="resolve-btn" class="btn">Resolve</button>
 <span id="status-text" style="font-family:var(--mono);font-size:.72rem;color:var(--fg3)"></span>
 </div>
@@ -502,7 +504,7 @@ input{font-family:var(--mono);font-size:.78rem}
 <script>
 (function(){var b=document.querySelector(".topbar-right");if(!b)return;var k="egress-proxy-theme";function s(d){document.documentElement.classList.toggle("dark",d)}var v;try{v=localStorage.getItem(k)}catch(e){};if(v==="dark"||v===null)s(true);else if(v==="light")s(false);})();
 (function(){
-var btn=document.getElementById("resolve-btn"),inp=document.getElementById("vid-input"),status=document.getElementById("status-text"),stDot=document.getElementById("status-dot");
+var btn=document.getElementById("resolve-btn"),inp=document.getElementById("vid-input"),keyInp=document.getElementById("key-input"),status=document.getElementById("status-text"),stDot=document.getElementById("status-dot");
 function $(i){return document.getElementById(i)}
 function show(id){$(id).style.display=""}
 function hide(id){$(id).style.display="none"}
@@ -521,7 +523,7 @@ function run(){
   hide("result-area");hide("error-area");
   status.textContent="Resolving...";stDot.innerHTML='<span class="dot" style="background:var(--amber)"></span>loading';
   btn.disabled=true;btn.textContent="...";
-  var key="${REQUIRED_KEY}";
+  var key=keyInp.value.trim();
   var headers={"Content-Type":"application/json"};
   if(key)headers["X-Proxy-Key"]=key;
   fetch("/api/resolve",{method:"POST",headers:headers,body:JSON.stringify({videoId:id})})

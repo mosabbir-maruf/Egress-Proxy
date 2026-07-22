@@ -102,5 +102,7 @@ heroku ps:scale web=1
 
 ## Credits
 
-DoodStream resolver core logic — pass_md5 handshake, TLS fingerprint, and
-`buildDirectLink` — sourced from the open-source community.
+DoodStream resolver core logic by [sharoon7171](https://github.com/sharoon7171)
+— [doodstream-direct-resolver](https://github.com/sharoon7171/doodstream-direct-resolver).
+pass_md5 handshake, TLS fingerprint, and `buildDirectLink` reverse-engineered
+from that project.

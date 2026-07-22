@@ -99,3 +99,8 @@ heroku ps:scale web=1
 3. `GET {mirror}/pass_md5/{hash}/{token}` — returns CDN prefix URL.
 4. Builds final CDN URL with 10-char random suffix + token + expiry.
 5. Verifies CDN link with `Range: bytes=0-15` HEAD request.
+
+## Credits
+
+DoodStream resolver adapted from
+[doodstream-direct-resolver](https://github.com/lscofield/node-urlresolver-api).

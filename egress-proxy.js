@@ -120,7 +120,7 @@ function getH2Session(origin) {
   return session;
 }
 
-const CHROME_PROXY_HOSTS = ['cloudatacdn.com', 'cloudadsts.com', 'cloudadus.com'];
+const CHROME_PROXY_HOSTS = ['doodstream.com', 'playmogo.com', 'do7go.com', 'dood.li', 'myvidplay.com', 'dood.ws', 'dood.video', 'dood.so', 'dood.sh', 'dood.pm', 'doodcdn.com', 'cloudatacdn.com', 'cloudadsts.com', 'cloudadus.com'];
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const CHROME_HINTS = {

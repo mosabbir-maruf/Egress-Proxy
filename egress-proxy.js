@@ -133,7 +133,12 @@ const CHROME_HINTS = {
 };
 
 function injectChromeHeaders(headers) {
-  const out = { ...CHROME_HINTS, ...headers };
+  const out = { ...CHROME_HINTS };
+  if (headers) {
+    if (headers.referer || headers.Referer) out.referer = headers.referer || headers.Referer;
+    if (headers.range || headers.Range) out.range = headers.range || headers.Range;
+    if (headers.origin || headers.Origin) out.origin = headers.origin || headers.Origin;
+  }
   return out;
 }
 

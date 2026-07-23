@@ -40,6 +40,9 @@ const ALLOWED_BASE = [
   "dood.li",
   "myvidplay.com",
   "do7go.com",
+  "cloudatacdn.com",
+  "cloudadsts.com",
+  "cloudadus.com",
 ];
 
 if (PROXY_ALLOWED_EXTRA) {

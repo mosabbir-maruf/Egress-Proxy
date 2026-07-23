@@ -225,11 +225,6 @@ function proxyError(code) {
   return error;
 }
 
-function getLocation(headers) {
-  if (typeof headers?.get === 'function') return headers.get("location");
-  return headers?.location || headers?.Location || null;
-}
-
 async function fetchAllowedTarget(target, { method, headers, body, signal }) {
   let currentUrl = target;
   let currentMethod = method;
@@ -246,7 +241,8 @@ async function fetchAllowedTarget(target, { method, headers, body, signal }) {
 
     if (!isRedirect(upstream.status)) return { upstream, target: currentUrl };
 
-    const location = getLocation(upstream.headers);
+    const upstreamHeaders = upstream.headers;
+    const location = typeof upstreamHeaders?.get === 'function' ? upstreamHeaders.get("location") : (upstreamHeaders?.location || upstreamHeaders?.Location || null);
     await cancelBody(upstream);
     if (!location) throw proxyError("ERR_REDIRECT_MISSING_LOCATION");
     if (redirects >= MAX_REDIRECTS) throw proxyError("ERR_TOO_MANY_REDIRECTS");
@@ -358,6 +354,10 @@ const server = http.createServer(async (req, res) => {
       if (!directLink) {
         sendJson(res, 400, JSON.stringify({ error: "Direct link URL is required" }));
         return;
+      }
+      if (REQUIRED_KEY) {
+        const provided = reqUrl.searchParams.get("key") || "";
+        if (!hasValidKey(provided)) { sendJson(res, 403, JSON_FORBIDDEN); return; }
       }
       const parsed = parseTarget(directLink);
       if (parsed.error) { sendTargetError(res, parsed.error); return; }

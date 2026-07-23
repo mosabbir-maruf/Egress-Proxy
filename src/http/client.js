@@ -184,4 +184,58 @@ export async function fetchText(urlStr, extraHeaders = {}, mode = 'document') {
   }
 }
 
+export function fetchStream(urlStr, extraHeaders = {}) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const tryH1 = () => {
+      const req = https.request({
+        hostname: url.hostname,
+        port: 443,
+        path: `${url.pathname}${url.search}`,
+        method: 'GET',
+        headers: { ...fetchHeaders(), ...extraHeaders },
+        servername: url.hostname,
+        ...chromeTlsOptions(url.hostname),
+        ALPNProtocols: ['http/1.1'],
+      }, (res) => {
+        const decompressor = bodyDecompressStream(res.headers['content-encoding']);
+        resolve({
+          statusCode: res.statusCode,
+          headers: res.headers,
+          stream: decompressor ? (res.pipe(decompressor), decompressor) : res,
+        });
+      });
+      req.on('error', reject);
+      req.end();
+    };
+    const tryH2 = () => {
+      const session = getSession(url.origin);
+      const req = session.request({
+        ':method': 'GET',
+        ':path': `${url.pathname}${url.search}`,
+        ':authority': url.host,
+        ':scheme': 'https',
+        ...fetchHeaders(),
+        ...extraHeaders,
+      });
+      req.on('response', (responseHeaders) => {
+        const decompressor = bodyDecompressStream(responseHeaders['content-encoding']);
+        resolve({
+          statusCode: Number(responseHeaders[':status']),
+          headers: {
+            'content-type': responseHeaders['content-type'],
+            'content-range': responseHeaders['content-range'],
+            'content-length': responseHeaders['content-length'],
+            'accept-ranges': responseHeaders['accept-ranges'],
+          },
+          stream: decompressor ? (req.pipe(decompressor), decompressor) : req,
+        });
+      });
+      req.on('error', tryH1);
+      req.end();
+    };
+    tryH2();
+  });
+}
+
 

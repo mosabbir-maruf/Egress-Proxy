@@ -1,12 +1,10 @@
 import fs from "node:fs";
 import http from "node:http";
-import https from "node:https";
-import http2 from "node:http2";
-import tls from "node:tls";
 import { timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { URL } from "node:url";
 import { resolveDirectLink, verifyDirectLink } from "./src/doodstream/resolver.js";
+import { fetchStream } from "./src/http/client.js";
 
 const HTML_PAGE = fs.readFileSync(new URL("client/dashboard.html", import.meta.url), "utf8");
 const RESOLVE_PAGE = fs.readFileSync(new URL("client/resolver.html", import.meta.url), "utf8");
@@ -55,167 +53,7 @@ if (PROXY_ALLOWED_EXTRA) {
   }
 }
 
-// --- HTTP/2 with Chrome TLS fingerprint for doodstream CDN domains ---
-const SSL_OP_TLSEXT_PADDING = 1 << 4;
-const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
 
-const CHROME_CIPHERS = [
-  'TLS_AES_128_GCM_SHA256',
-  'TLS_AES_256_GCM_SHA384',
-  'TLS_CHACHA20_POLY1305_SHA256',
-  'ECDHE-ECDSA-AES128-GCM-SHA256',
-  'ECDHE-RSA-AES128-GCM-SHA256',
-  'ECDHE-ECDSA-AES256-GCM-SHA384',
-  'ECDHE-RSA-AES256-GCM-SHA384',
-  'ECDHE-ECDSA-CHACHA20-POLY1305',
-  'ECDHE-RSA-CHACHA20-POLY1305',
-  'ECDHE-RSA-AES128-SHA',
-  'ECDHE-RSA-AES256-SHA',
-  'AES128-GCM-SHA256',
-  'AES256-GCM-SHA384',
-  'AES128-SHA',
-  'AES256-SHA',
-].join(':');
-
-const CHROME_H2_SETTINGS = {
-  headerTableSize: 65536,
-  enablePush: false,
-  initialWindowSize: 6291456,
-  maxFrameSize: 16384,
-  maxConcurrentStreams: 1000,
-  maxHeaderListSize: 262144,
-};
-
-function chromeTlsOptions(hostname, alpn) {
-  return {
-    host: hostname,
-    port: 443,
-    servername: hostname,
-    ALPNProtocols: alpn || ['h2', 'http/1.1'],
-    ciphers: CHROME_CIPHERS,
-    sigalgs: 'ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512',
-    ecdhCurve: 'X25519:prime256v1:secp384r1',
-    minVersion: 'TLSv1.2',
-    maxVersion: 'TLSv1.3',
-    secureOptions: SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC,
-  };
-}
-
-const h2Sessions = new Map();
-
-function getH2Session(origin) {
-  if (h2Sessions.has(origin)) {
-    const s = h2Sessions.get(origin);
-    if (!s.closed && !s.destroyed) return s;
-    h2Sessions.delete(origin);
-  }
-  const url = new URL(origin);
-  const session = http2.connect(origin, {
-    settings: CHROME_H2_SETTINGS,
-    createConnection: () => tls.connect(chromeTlsOptions(url.hostname, ['h2'])),
-  });
-  session.on('error', () => h2Sessions.delete(origin));
-  session.on('close', () => h2Sessions.delete(origin));
-  h2Sessions.set(origin, session);
-  return session;
-}
-
-const CHROME_PROXY_HOSTS = ['doodstream.com', 'playmogo.com', 'do7go.com', 'dood.li', 'myvidplay.com', 'dood.ws', 'dood.video', 'dood.so', 'dood.sh', 'dood.pm', 'doodcdn.com', 'cloudatacdn.com', 'cloudadsts.com', 'cloudadus.com'];
-
-const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const CHROME_HINTS = {
-  'user-agent': CHROME_UA,
-  'accept': '*/*',
-  'accept-language': 'en-US,en;q=0.9',
-  'accept-encoding': 'gzip, deflate, br',
-  'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-  'sec-ch-ua-mobile': '?0',
-  'sec-ch-ua-platform': '"Windows"',
-  'sec-fetch-dest': 'empty',
-  'sec-fetch-mode': 'cors',
-  'sec-fetch-site': 'same-origin',
-};
-
-function injectChromeHeaders(headers) {
-  const out = { ...CHROME_HINTS };
-  if (headers) {
-    if (headers.referer || headers.Referer) out.referer = headers.referer || headers.Referer;
-    if (headers.range || headers.Range) out.range = headers.range || headers.Range;
-    if (headers.origin || headers.Origin) out.origin = headers.origin || headers.Origin;
-  }
-  return out;
-}
-
-function needsChromeTls(hostname) {
-  const h = normalizeHost(hostname);
-  return CHROME_PROXY_HOSTS.some(d => h === d || h.endsWith('.' + d));
-}
-
-function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(urlStr);
-    const session = getH2Session(url.origin);
-    const reqHeaders = { ':method': 'GET', ':path': url.pathname + url.search, ':authority': url.host, ':scheme': 'https' };
-    const ch = injectChromeHeaders(headers);
-    for (const k in ch) reqHeaders[k.toLowerCase()] = String(ch[k]);
-    const req = session.request(reqHeaders);
-    req.on('response', (responseHeaders) => {
-      const status = responseHeaders[':status'];
-      const outHeaders = {};
-      for (const [k, v] of Object.entries(responseHeaders)) {
-        if (!k.startsWith(':')) outHeaders[k] = Array.isArray(v) ? v.join(', ') : String(v);
-      }
-      resolve({
-        status,
-        headers: outHeaders,
-        body: req,
-        ok: status >= 200 && status < 300,
-      });
-    });
-    req.setTimeout(10_000, () => { req.close(); reject(new Error('H2_TIMEOUT')); });
-    req.on('error', reject);
-    if (signal) {
-      signal.addEventListener('abort', () => req.close(), { once: true });
-    }
-    req.end();
-  });
-}
-
-function fetchWithChromeH1(urlStr, { headers, signal } = {}) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(urlStr);
-    const req = https.request({
-      hostname: url.hostname,
-      port: 443,
-      path: url.pathname + url.search,
-      method: 'GET',
-      headers: injectChromeHeaders(headers),
-      ...chromeTlsOptions(url.hostname, ['http/1.1']),
-    }, (res) => {
-      resolve({
-        status: res.statusCode,
-        headers: res.headers,
-        body: res,
-        ok: res.statusCode >= 200 && res.statusCode < 300,
-      });
-    });
-    req.setTimeout(10_000, () => { req.destroy(); reject(new Error('H1_TIMEOUT')); });
-    req.on('error', reject);
-    if (signal) {
-      signal.addEventListener('abort', () => req.destroy(), { once: true });
-    }
-    req.end();
-  });
-}
-
-async function fetchWithChromeFallback(urlStr, opts) {
-  try {
-    return await fetchWithChromeH1(urlStr, opts);
-  } catch {
-    return fetchWithChromeH2(urlStr, opts);
-  }
-}
-// ---------------------------------------------------------
 
 const RE_HTTP = /^https?:$/;
 
@@ -396,18 +234,15 @@ async function fetchAllowedTarget(target, { method, headers, body, signal }) {
   let currentUrl = target;
   let currentMethod = method;
   let currentBody = body;
-  const useChrome = needsChromeTls(new URL(currentUrl).hostname);
 
   for (let redirects = 0; ; redirects += 1) {
-    const upstream = useChrome
-      ? await fetchWithChromeFallback(currentUrl, { headers, signal })
-      : await fetch(currentUrl, {
-          method: currentMethod,
-          headers,
-          body: currentBody,
-          signal,
-          redirect: "manual",
-        });
+    const upstream = await fetch(currentUrl, {
+      method: currentMethod,
+      headers,
+      body: currentBody,
+      signal,
+      redirect: "manual",
+    });
 
     if (!isRedirect(upstream.status)) return { upstream, target: currentUrl };
 
@@ -419,7 +254,7 @@ async function fetchAllowedTarget(target, { method, headers, body, signal }) {
     const next = parseTarget(location, currentUrl);
     if (next.error) throw proxyError(`ERR_REDIRECT_${next.error.toUpperCase()}`);
 
-    if (!useChrome && (upstream.status === 303 || ((upstream.status === 301 || upstream.status === 302) && currentMethod === "POST"))) {
+    if (upstream.status === 303 || ((upstream.status === 301 || upstream.status === 302) && currentMethod === "POST")) {
       currentMethod = "GET";
       currentBody = undefined;
     }
@@ -513,6 +348,28 @@ const server = http.createServer(async (req, res) => {
         }));
       } catch (error) {
         sendJson(res, 400, JSON.stringify({ error: error.message || "Could not resolve direct link" }));
+      }
+      return;
+    }
+
+    if (pathname === "/api/stream" && (method === "GET" || method === "HEAD")) {
+      const directLink = reqUrl.searchParams.get("url");
+      const referer = reqUrl.searchParams.get("referer") || directLink;
+      if (!directLink) {
+        sendJson(res, 400, JSON.stringify({ error: "Direct link URL is required" }));
+        return;
+      }
+      const parsed = parseTarget(directLink);
+      if (parsed.error) { sendTargetError(res, parsed.error); return; }
+      try {
+        const headers = { referer };
+        if (req.headers.range) headers.range = req.headers.range;
+        const upstream = await fetchStream(directLink, headers);
+        res.writeHead(upstream.statusCode, upstream.headers);
+        if (method === "HEAD") { upstream.stream.resume(); res.end(); return; }
+        upstream.stream.pipe(res);
+      } catch (err) {
+        sendJson(res, 502, JSON.stringify({ error: err.message || "Proxy playback failed" }));
       }
       return;
     }

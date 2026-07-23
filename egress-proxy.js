@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import { timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { URL } from "node:url";
@@ -51,6 +52,77 @@ if (PROXY_ALLOWED_EXTRA) {
     if (h) ALLOWED_BASE.push(h);
   }
 }
+
+// --- Chrome TLS fingerprint for doodstream CDN domains ---
+const SSL_OP_TLSEXT_PADDING = 1 << 4;
+const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
+
+const CHROME_CIPHERS = [
+  'TLS_AES_128_GCM_SHA256',
+  'TLS_AES_256_GCM_SHA384',
+  'TLS_CHACHA20_POLY1305_SHA256',
+  'ECDHE-ECDSA-AES128-GCM-SHA256',
+  'ECDHE-RSA-AES128-GCM-SHA256',
+  'ECDHE-ECDSA-AES256-GCM-SHA384',
+  'ECDHE-RSA-AES256-GCM-SHA384',
+  'ECDHE-ECDSA-CHACHA20-POLY1305',
+  'ECDHE-RSA-CHACHA20-POLY1305',
+  'ECDHE-RSA-AES128-SHA',
+  'ECDHE-RSA-AES256-SHA',
+  'AES128-GCM-SHA256',
+  'AES256-GCM-SHA384',
+  'AES128-SHA',
+  'AES256-SHA',
+].join(':');
+
+function chromeTlsOptions(hostname) {
+  return {
+    host: hostname,
+    port: 443,
+    servername: hostname,
+    ALPNProtocols: ['http/1.1'],
+    ciphers: CHROME_CIPHERS,
+    sigalgs: 'ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512',
+    ecdhCurve: 'X25519:prime256v1:secp384r1',
+    minVersion: 'TLSv1.2',
+    maxVersion: 'TLSv1.3',
+    secureOptions: SSL_OP_TLSEXT_PADDING | SSL_OP_NO_ENCRYPT_THEN_MAC,
+  };
+}
+
+const CHROME_PROXY_HOSTS = ['cloudatacdn.com', 'cloudadsts.com', 'cloudadus.com'];
+
+function fetchWithChromeTls(urlStr, { headers, signal } = {}) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const req = https.request({
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname + url.search,
+      method: 'GET',
+      headers,
+      ...chromeTlsOptions(url.hostname),
+    }, (res) => {
+      resolve({
+        status: res.statusCode,
+        headers: res.headers,
+        body: res,
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+      });
+    });
+    req.on('error', reject);
+    if (signal) {
+      signal.addEventListener('abort', () => req.destroy(), { once: true });
+    }
+    req.end();
+  });
+}
+
+function needsChromeTls(hostname) {
+  const h = normalizeHost(hostname);
+  return CHROME_PROXY_HOSTS.some(d => h === d || h.endsWith('.' + d));
+}
+// ---------------------------------------------------------
 
 const RE_HTTP = /^https?:$/;
 
@@ -208,7 +280,11 @@ function isRedirect(status) {
 
 async function cancelBody(response) {
   try {
-    await response.body?.cancel();
+    if (response.body instanceof Readable) {
+      response.body.destroy();
+    } else {
+      await response.body?.cancel();
+    }
   } catch {}
 }
 
@@ -218,23 +294,31 @@ function proxyError(code) {
   return error;
 }
 
+function getLocation(headers) {
+  if (typeof headers?.get === 'function') return headers.get("location");
+  return headers?.location || headers?.Location || null;
+}
+
 async function fetchAllowedTarget(target, { method, headers, body, signal }) {
   let currentUrl = target;
   let currentMethod = method;
   let currentBody = body;
+  const useChrome = needsChromeTls(new URL(currentUrl).hostname);
 
   for (let redirects = 0; ; redirects += 1) {
-    const upstream = await fetch(currentUrl, {
-      method: currentMethod,
-      headers,
-      body: currentBody,
-      signal,
-      redirect: "manual",
-    });
+    const upstream = useChrome
+      ? await fetchWithChromeTls(currentUrl, { headers, signal })
+      : await fetch(currentUrl, {
+          method: currentMethod,
+          headers,
+          body: currentBody,
+          signal,
+          redirect: "manual",
+        });
 
     if (!isRedirect(upstream.status)) return { upstream, target: currentUrl };
 
-    const location = upstream.headers.get("location");
+    const location = getLocation(upstream.headers);
     await cancelBody(upstream);
     if (!location) throw proxyError("ERR_REDIRECT_MISSING_LOCATION");
     if (redirects >= MAX_REDIRECTS) throw proxyError("ERR_TOO_MANY_REDIRECTS");
@@ -242,10 +326,7 @@ async function fetchAllowedTarget(target, { method, headers, body, signal }) {
     const next = parseTarget(location, currentUrl);
     if (next.error) throw proxyError(`ERR_REDIRECT_${next.error.toUpperCase()}`);
 
-    if (
-      upstream.status === 303 ||
-      ((upstream.status === 301 || upstream.status === 302) && currentMethod === "POST")
-    ) {
+    if (!useChrome && (upstream.status === 303 || ((upstream.status === 301 || upstream.status === 302) && currentMethod === "POST"))) {
       currentMethod = "GET";
       currentBody = undefined;
     }
@@ -404,7 +485,9 @@ const server = http.createServer(async (req, res) => {
 
     res.writeHead(status, outHeaders);
     if (upstream.body) {
-      const nodeStream = Readable.fromWeb(upstream.body);
+      const nodeStream = upstream.body instanceof Readable
+        ? upstream.body
+        : Readable.fromWeb(upstream.body);
       const dispose = () => upstreamContext?.dispose();
       nodeStream.once("error", () => {
         dispose();

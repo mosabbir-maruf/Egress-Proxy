@@ -122,6 +122,21 @@ function getH2Session(origin) {
 
 const CHROME_PROXY_HOSTS = ['cloudatacdn.com', 'cloudadsts.com', 'cloudadus.com'];
 
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const CHROME_HINTS = {
+  'user-agent': CHROME_UA,
+  'accept': '*/*',
+  'accept-language': 'en-US,en;q=0.9',
+  'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+  'sec-ch-ua-mobile': '?0',
+  'sec-ch-ua-platform': '"Windows"',
+};
+
+function injectChromeHeaders(headers) {
+  const out = { ...CHROME_HINTS, ...headers };
+  return out;
+}
+
 function needsChromeTls(hostname) {
   const h = normalizeHost(hostname);
   return CHROME_PROXY_HOSTS.some(d => h === d || h.endsWith('.' + d));
@@ -132,9 +147,8 @@ function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
     const url = new URL(urlStr);
     const session = getH2Session(url.origin);
     const reqHeaders = { ':method': 'GET', ':path': url.pathname + url.search, ':authority': url.host, ':scheme': 'https' };
-    if (headers) {
-      for (const k in headers) reqHeaders[k.toLowerCase()] = String(headers[k]);
-    }
+    const ch = injectChromeHeaders(headers);
+    for (const k in ch) reqHeaders[k.toLowerCase()] = String(ch[k]);
     const req = session.request(reqHeaders);
     req.on('response', (responseHeaders) => {
       const status = responseHeaders[':status'];
@@ -165,7 +179,7 @@ function fetchWithChromeH1(urlStr, { headers, signal } = {}) {
       port: 443,
       path: url.pathname + url.search,
       method: 'GET',
-      headers,
+      headers: injectChromeHeaders(headers),
       ...chromeTlsOptions(url.hostname, ['http/1.1']),
     }, (res) => {
       resolve({

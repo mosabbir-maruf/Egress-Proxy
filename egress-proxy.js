@@ -86,12 +86,12 @@ const CHROME_H2_SETTINGS = {
   maxHeaderListSize: 262144,
 };
 
-function chromeTlsOptions(hostname) {
+function chromeTlsOptions(hostname, alpn) {
   return {
     host: hostname,
     port: 443,
     servername: hostname,
-    ALPNProtocols: ['h2', 'http/1.1'],
+    ALPNProtocols: alpn || ['h2', 'http/1.1'],
     ciphers: CHROME_CIPHERS,
     sigalgs: 'ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512',
     ecdhCurve: 'X25519:prime256v1:secp384r1',
@@ -112,7 +112,7 @@ function getH2Session(origin) {
   const url = new URL(origin);
   const session = http2.connect(origin, {
     settings: CHROME_H2_SETTINGS,
-    createConnection: () => tls.connect(chromeTlsOptions(url.hostname)),
+    createConnection: () => tls.connect(chromeTlsOptions(url.hostname, ['h2'])),
   });
   session.on('error', () => h2Sessions.delete(origin));
   session.on('close', () => h2Sessions.delete(origin));
@@ -131,18 +131,12 @@ function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
     const session = getH2Session(url.origin);
-    const req = session.request({
-      ':method': 'GET',
-      ':path': url.pathname + url.search,
-      ':authority': url.host,
-      ':scheme': 'https',
-      ...Object.fromEntries(
-        Object.entries(headers || {}).map(([k, v]) => [k.toLowerCase(), String(v)])
-      ),
-    });
-    const timer = setTimeout(() => { req.close(); reject(new Error('H2_TIMEOUT')); }, 8_000);
+    const reqHeaders = { ':method': 'GET', ':path': url.pathname + url.search, ':authority': url.host, ':scheme': 'https' };
+    if (headers) {
+      for (const k in headers) reqHeaders[k.toLowerCase()] = String(headers[k]);
+    }
+    const req = session.request(reqHeaders);
     req.on('response', (responseHeaders) => {
-      clearTimeout(timer);
       const status = responseHeaders[':status'];
       const outHeaders = {};
       for (const [k, v] of Object.entries(responseHeaders)) {
@@ -155,9 +149,9 @@ function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
         ok: status >= 200 && status < 300,
       });
     });
-    req.on('error', (err) => { clearTimeout(timer); reject(err); });
+    req.on('error', reject);
     if (signal) {
-      signal.addEventListener('abort', () => { clearTimeout(timer); req.close(); }, { once: true });
+      signal.addEventListener('abort', () => req.close(), { once: true });
     }
     req.end();
   });
@@ -172,7 +166,7 @@ function fetchWithChromeH1(urlStr, { headers, signal } = {}) {
       path: url.pathname + url.search,
       method: 'GET',
       headers,
-      ...chromeTlsOptions(url.hostname),
+      ...chromeTlsOptions(url.hostname, ['http/1.1']),
     }, (res) => {
       resolve({
         status: res.statusCode,
@@ -191,12 +185,9 @@ function fetchWithChromeH1(urlStr, { headers, signal } = {}) {
 
 async function fetchWithChromeFallback(urlStr, opts) {
   try {
-    return await fetchWithChromeH2(urlStr, opts);
-  } catch (err) {
-    if (err.message === 'H2_TIMEOUT') {
-      return fetchWithChromeH1(urlStr, opts);
-    }
-    throw err;
+    return await fetchWithChromeH1(urlStr, opts);
+  } catch {
+    return fetchWithChromeH2(urlStr, opts);
   }
 }
 // ---------------------------------------------------------

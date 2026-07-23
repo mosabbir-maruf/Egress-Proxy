@@ -31,6 +31,15 @@ const ALLOWED_BASE = [
   "goodstream.cc",
   "doodstream.com",
   "playmogo.com",
+  "dood.ws",
+  "dood.video",
+  "dood.so",
+  "dood.sh",
+  "dood.pm",
+  "doodcdn.com",
+  "dood.li",
+  "myvidplay.com",
+  "do7go.com",
 ];
 
 if (PROXY_ALLOWED_EXTRA) {

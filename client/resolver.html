@@ -141,14 +141,14 @@ function run(){
     if(d.directLink){
       txt("r-title",d.title||id);
       txt("r-direct-link",d.directLink);
-      var proxy=(window.location.origin||"")+"/?url="+encodeURIComponent(d.directLink)+"&referer="+encodeURIComponent(d.referer||"");
+      var proxy=(window.location.origin||"")+"/api/stream?url="+encodeURIComponent(d.directLink)+"&referer="+encodeURIComponent(d.referer||"");
       if(key)proxy+="&key="+encodeURIComponent(key);
       txt("r-proxy-link",proxy);
       txt("r-referer",d.referer||"—");
       txt("r-size",d.contentLength?(parseInt(d.contentLength)/1048576).toFixed(1)+" MB":"—");
       show("result-area");
       var video=document.getElementById("video-player");
-      video.src=d.directLink;
+      video.src=proxy;
       video.load();
       status.textContent="Ready";stDot.innerHTML='<span class="dot"></span>ready';
     }else{

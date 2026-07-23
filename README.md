@@ -1,13 +1,14 @@
 # Heroku / Koyeb Proxy Service
 
-A single Node.js process hosting two independent services:
+A single Node.js process hosting three services:
 
 | Service | Endpoint | Purpose |
 |---------|----------|---------|
-| **Egress Proxy** | `/?url=<target>` | Relay CDN requests from Cloudflare Workers |
+| **Egress Proxy** | `/?url=<target>` | Relay HTTP requests (generic, no Chrome TLS) |
 | **DoodStream Resolver** | `POST /api/resolve` | Resolve video IDs to direct CDN URLs |
+| **Stream Proxy** | `GET/HEAD /api/stream` | Proxy CDN video via Chrome TLS fingerprint |
 
-Both share the same HTTP server (zero npm dependencies). Deployable on Heroku or Koyeb.
+All share the same HTTP server (zero npm dependencies). Deployable on Koyeb (Heroku not recommended — Cloudflare blocks Heroku IPs).
 
 ---
 
@@ -31,16 +32,24 @@ Both share the same HTTP server (zero npm dependencies). Deployable on Heroku or
 ## 1. Architecture
 
 ```
-┌─────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
-│  Caller      │────▶│  Heroku / Koyeb (this service)     │────▶│  Upstream    │
-│  (external)  │     │                                     │     │  CDN / API   │
-│              │     │  /?url=       → Egress Proxy        │     │              │
-│              │     │  POST /api/resolve → DoodStream     │     │              │
-└─────────────┘     └─────────────────────────────────────┘     └──────────────┘
+┌─────────────┐     ┌─────────────────────────────────────────┐     ┌──────────────────┐
+│  Caller      │────▶│  Koyeb (this service)                  │────▶│  Upstream        │
+│  (external)  │     │                                         │     │  CDN / API       │
+│              │     │  /?url=            → Egress Proxy       │     │                  │
+│              │     │  POST /api/resolve  → DoodStream        │     │  doodstream.com  │
+│              │     │  GET /api/stream    → Stream Proxy*     │     │  cloudatacdn.com │
+│              │     │                                         │     │  playmogo.com    │
+│              │     │  * uses Chrome TLS fingerprint           │     │  ...             │
+└─────────────┘     └─────────────────────────────────────────┘     └──────────────────┘
 ```
 
 Requests arrive at the same port. The router (`egress-proxy.js`) dispatches to
 the correct handler based on the HTTP method and path.
+
+The **Stream Proxy** (`/api/stream`) uses `fetchStream` from the HTTP client —
+Chrome TLS cipher suite, HTTP/2 with H1 fallback, Chrome `sec-*` headers, and
+session pooling. This bypasses Cloudflare on doodstream CDN domains where regular
+`fetch()` is blocked.
 
 ---
 
@@ -48,10 +57,10 @@ the correct handler based on the HTTP method and path.
 
 ```
 egress-proxy-heroku/
-├── Procfile                          # Heroku process definition
+├── Procfile                          # Koyeb process definition
 ├── package.json                      # ESM, Node 22, zero dependencies
 ├── .node-version                     # Node.js version pin
-├── egress-proxy.js                   # HTTP server + route handlers (449 lines)
+├── egress-proxy.js                   # HTTP server + route handlers (490 lines)
 ├── .env.example                      # Local environment reference
 ├── README.md                         # This file
 ├── client/
@@ -63,7 +72,7 @@ egress-proxy-heroku/
     ├── doodstream/
     │   └── resolver.js               # DoodStream pass_md5 handshake (94 lines)
     └── http/
-        ├── client.js                 # Chrome TLS + HTTP/2 transport (177 lines)
+        ├── client.js                 # Chrome TLS + HTTP/2 transport + fetchStream (241 lines)
         └── browser-headers.js        # Chrome 131 header profiles (36 lines)
 ```
 
@@ -96,7 +105,10 @@ Status codes, `Content-Type`, `Content-Length`, `Content-Range`, and
 ```
 itsnitrox.tech, web.nxsha.app, nxsha.app, ydc1wes.me, dpdns.org,
 clarionwellbeing.cfd, animanga.fun, lizer123.site, korso420dim.com,
-tripplestream.online, goodstream.cc, doodstream.com, playmogo.com
+tripplestream.online, goodstream.cc, doodstream.com, playmogo.com,
+dood.ws, dood.video, dood.so, dood.sh, dood.pm, doodcdn.com,
+dood.li, myvidplay.com, do7go.com,
+cloudatacdn.com, cloudadsts.com, cloudadus.com
 ```
 
 Additional domains can be added via the `PROXY_ALLOWED_DOMAINS` environment
@@ -170,7 +182,50 @@ client                     Heroku/Koyeb                     doodstream.com / pla
 
 ---
 
-## 4. Web Interface
+### 3.3 Stream Proxy
+
+Proxies doodstream CDN video URLs using the same Chrome TLS fingerprint as the
+resolver. Designed for **browser playback** — browsers cannot set a cross-origin
+`Referer` on `<video src>`, and CDN URLs are IP-locked to the resolving server.
+
+`/api/stream` runs on the same Koyeb instance as the resolver (same IP), uses
+`fetchStream` from the HTTP client (H2→H1 fallback, Chrome headers), and streams
+the video bytes back to the caller with proper `Content-Range` support (seeking).
+
+**Request:**
+
+```
+GET /api/stream?url=<encoded-directLink>&referer=<encoded-referer>&key=<auth-key>
+HEAD /api/stream?url=<encoded-directLink>&referer=<encoded-referer>&key=<auth-key>
+```
+
+| Param | Source |
+|-------|--------|
+| `url` | `directLink` from `/api/resolve` response |
+| `referer` | `referer` from `/api/resolve` response |
+| `key` | `EGRESS_PROXY_KEY` (query param, since browser can't set headers) |
+
+**Success:** Streams `video/mp4` with `Content-Range` / `Accept-Ranges` for seeking.
+
+**Error responses:**
+
+| Status | Cause |
+|--------|-------|
+| `400` | Missing or invalid URL param |
+| `403` | Invalid or missing `key` (if `EGRESS_PROXY_KEY` is set) |
+| `502` | CDN fetch failed (timeout, TLS error, upstream reject) |
+
+**Integration example (server-side):**
+
+```js
+// LustHub extract controller: instead of returning the raw CDN URL,
+// return the /api/stream proxy URL so the browser can play it.
+const streamUrl = new URL('/api/stream', DOOD_RESOLVER);
+streamUrl.searchParams.set('url', data.directLink);
+streamUrl.searchParams.set('referer', data.referer);
+streamUrl.searchParams.set('key', process.env.EGRESS_PROXY_KEY);
+return { stream_url: streamUrl.href };
+```
 
 Two standalone HTML pages in `client/` are served at startup:
 
@@ -181,8 +236,8 @@ Two standalone HTML pages in `client/` are served at startup:
 
 Dynamic values (allowed host count, key status, header timeout) are fetched from
 `GET /api/config` and rendered client-side. The `/resolve` page includes an
-HTML5 video player and copy buttons for both the direct CDN link and the egress
-proxy URL. Both pages share the same dark/light theme (persisted in localStorage).
+HTML5 video player and copy buttons for both the direct CDN link and the stream
+proxy URL (`/api/stream`). Both pages share the same dark/light theme (persisted in localStorage).
 
 ---
 
@@ -210,6 +265,9 @@ curl -sS "http://localhost:8700/health"
 curl -X POST http://localhost:8700/api/resolve \
   -H "Content-Type: application/json" \
   -d '{"videoId":"02n3dhf9fvqu"}'
+
+# Test stream proxy (use the directLink & referer from resolve)
+curl -o video.mp4 "http://localhost:8700/api/stream?url=<encoded-directLink>&referer=<encoded-referer>"
 
 # Open web dashboard
 open http://localhost:8700
@@ -271,7 +329,8 @@ propagation, and client-abort cleanup for the egress proxy.
 | Client disconnect | `AbortController` aborts upstream fetch immediately on client close |
 | Header timeout | Upstream must respond within `EGRESS_PROXY_HEADER_TIMEOUT_MS` |
 | Body limit | 10 MB max request body (enforced during streaming read) |
-| Closed proxy mode | Set `EGRESS_PROXY_KEY` to secure both endpoints |
+| Closed proxy mode | Set `EGRESS_PROXY_KEY` to secure all endpoints (including `/api/stream`) |
+| IP binding | CDN URLs are IP-locked — `/api/stream` must run on the same server that resolved the video |
 
 ---
 

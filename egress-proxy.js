@@ -45,6 +45,17 @@ const ALLOWED_BASE = [
   "cloudadsts.com",
   "cloudadus.com",
   "dooodster.com",
+  "porntn.com",
+  "nvs2.porntn.com",
+  "vidsrc.to",
+  "vidsrc2.ru",
+  "vidsrcme.ru",
+  "vidsrcme.su",
+  "vidsrc-me.ru",
+  "vidsrc-embed.ru",
+  "vidsrc-embed.su",
+  "vidsrc.io",
+  "quorumofquiddity.site",
 ];
 
 if (PROXY_ALLOWED_EXTRA) {

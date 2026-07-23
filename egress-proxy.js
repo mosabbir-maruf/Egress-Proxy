@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import http2 from "node:http2";
 import tls from "node:tls";
 import { timingSafeEqual } from "node:crypto";
@@ -129,8 +130,7 @@ function needsChromeTls(hostname) {
 function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
-    const origin = url.origin;
-    const session = getH2Session(origin);
+    const session = getH2Session(url.origin);
     const req = session.request({
       ':method': 'GET',
       ':path': url.pathname + url.search,
@@ -140,7 +140,9 @@ function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
         Object.entries(headers || {}).map(([k, v]) => [k.toLowerCase(), String(v)])
       ),
     });
+    const timer = setTimeout(() => { req.close(); reject(new Error('H2_TIMEOUT')); }, 8_000);
     req.on('response', (responseHeaders) => {
+      clearTimeout(timer);
       const status = responseHeaders[':status'];
       const outHeaders = {};
       for (const [k, v] of Object.entries(responseHeaders)) {
@@ -153,12 +155,49 @@ function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
         ok: status >= 200 && status < 300,
       });
     });
-    req.on('error', reject);
+    req.on('error', (err) => { clearTimeout(timer); reject(err); });
     if (signal) {
-      signal.addEventListener('abort', () => { req.close(); }, { once: true });
+      signal.addEventListener('abort', () => { clearTimeout(timer); req.close(); }, { once: true });
     }
     req.end();
   });
+}
+
+function fetchWithChromeH1(urlStr, { headers, signal } = {}) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const req = https.request({
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname + url.search,
+      method: 'GET',
+      headers,
+      ...chromeTlsOptions(url.hostname),
+    }, (res) => {
+      resolve({
+        status: res.statusCode,
+        headers: res.headers,
+        body: res,
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+      });
+    });
+    req.on('error', reject);
+    if (signal) {
+      signal.addEventListener('abort', () => req.destroy(), { once: true });
+    }
+    req.end();
+  });
+}
+
+async function fetchWithChromeFallback(urlStr, opts) {
+  try {
+    return await fetchWithChromeH2(urlStr, opts);
+  } catch (err) {
+    if (err.message === 'H2_TIMEOUT') {
+      return fetchWithChromeH1(urlStr, opts);
+    }
+    throw err;
+  }
 }
 // ---------------------------------------------------------
 
@@ -345,7 +384,7 @@ async function fetchAllowedTarget(target, { method, headers, body, signal }) {
 
   for (let redirects = 0; ; redirects += 1) {
     const upstream = useChrome
-      ? await fetchWithChromeH2(currentUrl, { headers, signal })
+      ? await fetchWithChromeFallback(currentUrl, { headers, signal })
       : await fetch(currentUrl, {
           method: currentMethod,
           headers,

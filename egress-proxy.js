@@ -44,6 +44,7 @@ const ALLOWED_BASE = [
   "cloudatacdn.com",
   "cloudadsts.com",
   "cloudadus.com",
+  "dooodster.com",
 ];
 
 if (PROXY_ALLOWED_EXTRA) {

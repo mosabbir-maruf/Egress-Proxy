@@ -163,6 +163,7 @@ function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
         ok: status >= 200 && status < 300,
       });
     });
+    req.setTimeout(10_000, () => { req.close(); reject(new Error('H2_TIMEOUT')); });
     req.on('error', reject);
     if (signal) {
       signal.addEventListener('abort', () => req.close(), { once: true });
@@ -189,6 +190,7 @@ function fetchWithChromeH1(urlStr, { headers, signal } = {}) {
         ok: res.statusCode >= 200 && res.statusCode < 300,
       });
     });
+    req.setTimeout(10_000, () => { req.destroy(); reject(new Error('H1_TIMEOUT')); });
     req.on('error', reject);
     if (signal) {
       signal.addEventListener('abort', () => req.destroy(), { once: true });

@@ -127,9 +127,13 @@ const CHROME_HINTS = {
   'user-agent': CHROME_UA,
   'accept': '*/*',
   'accept-language': 'en-US,en;q=0.9',
+  'accept-encoding': 'gzip, deflate, br',
   'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
   'sec-ch-ua-mobile': '?0',
   'sec-ch-ua-platform': '"Windows"',
+  'sec-fetch-dest': 'empty',
+  'sec-fetch-mode': 'cors',
+  'sec-fetch-site': 'same-origin',
 };
 
 function injectChromeHeaders(headers) {

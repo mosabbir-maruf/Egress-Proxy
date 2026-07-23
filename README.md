@@ -51,16 +51,19 @@ egress-proxy-heroku/
 ├── Procfile                          # Heroku process definition
 ├── package.json                      # ESM, Node 22, zero dependencies
 ├── .node-version                     # Node.js version pin
-├── egress-proxy.js                   # HTTP server + route handlers + HTML templates
+├── egress-proxy.js                   # HTTP server + route handlers (449 lines)
 ├── .env.example                      # Local environment reference
 ├── README.md                         # This file
+├── client/
+│   ├── dashboard.html                # Dashboard page (config fetched via /api/config)
+│   └── resolver.html                 # DoodStream resolver test page
 ├── test/
 │   └── egress-proxy.test.js          # Integration tests (node:test)
 └── src/
     ├── doodstream/
     │   └── resolver.js               # DoodStream pass_md5 handshake (94 lines)
     └── http/
-        ├── client.js                 # Chrome TLS + HTTP/2 transport (244 lines)
+        ├── client.js                 # Chrome TLS + HTTP/2 transport (177 lines)
         └── browser-headers.js        # Chrome 131 header profiles (36 lines)
 ```
 
@@ -169,16 +172,17 @@ client                     Heroku/Koyeb                     doodstream.com / pla
 
 ## 4. Web Interface
 
-Two web pages are served at the root path:
+Two standalone HTML pages in `client/` are served at startup:
 
-| Path | Description |
-|------|-------------|
-| `/` | Dashboard — shows service status, allowed hosts, environment config |
-| `/resolve` | Resolver test page — input video ID + key, resolve, copy links, play video |
+| Path | File | Description |
+|------|------|-------------|
+| `/` | `client/dashboard.html` | Dashboard — shows service status, allowed hosts, environment config |
+| `/resolve` | `client/resolver.html` | Resolver test page — input video ID + key, resolve, copy links, play video |
 
-The `/resolve` page includes an HTML5 video player and copy buttons for both
-the direct CDN link and the egress proxy URL. Both pages share the same
-dark/light theme (persisted in localStorage).
+Dynamic values (allowed host count, key status, header timeout) are fetched from
+`GET /api/config` and rendered client-side. The `/resolve` page includes an
+HTML5 video player and copy buttons for both the direct CDN link and the egress
+proxy URL. Both pages share the same dark/light theme (persisted in localStorage).
 
 ---
 

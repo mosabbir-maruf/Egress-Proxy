@@ -1,8 +1,12 @@
+import fs from "node:fs";
 import http from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { URL } from "node:url";
 import { resolveDirectLink, verifyDirectLink } from "./src/doodstream/resolver.js";
+
+const HTML_PAGE = fs.readFileSync(new URL("client/dashboard.html", import.meta.url), "utf8");
+const RESOLVE_PAGE = fs.readFileSync(new URL("client/resolver.html", import.meta.url), "utf8");
 
 const PORT = Number(process.env.PORT) || 8700;
 const REQUIRED_KEY = process.env.EGRESS_PROXY_KEY || "";
@@ -49,6 +53,11 @@ const MAX_BODY_BYTES = 10 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 
 const CT_JSON = { "content-type": "application/json" };
+const CONFIG_JSON = JSON.stringify({
+  allowedHosts: ALLOWED_BASE.length,
+  keyRequired: !!REQUIRED_KEY,
+  headerTimeout: Math.round(UPSTREAM_HEADER_TIMEOUT_MS / 1000),
+});
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value || "", 10);
@@ -259,293 +268,6 @@ function createUpstreamRequestContext(req, res) {
   };
 }
 
-const HTML_PAGE = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex, nofollow">
-<title>Egress Proxy</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
-<style>
-:root{--bg:#f7f5f1;--surface:#eeebe6;--border:#d4d0c8;--fg:#1c1a16;--fg2:#5c5850;--fg3:#9a958c;--amber:#a06c0c;--green:#1f7a44;--green-d:rgba(31,122,68,0.1);--mono:'Geist Mono','JetBrains Mono',monospace}
-.dark{--bg:#0c0b09;--surface:#131210;--border:#252320;--fg:#e8e4dc;--fg2:#b5afae;--fg3:#7a7670;--amber:#e8a020;--green:#3dba6e;--green-d:rgba(61,186,110,0.1)}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Geist','Inter',system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-.topbar{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:48px}
-.topbar-left{display:flex;align-items:center;gap:1.25rem}
-.wordmark{font-family:var(--mono);font-size:.8rem;font-weight:500;color:var(--fg);display:flex;align-items:center;gap:.5rem}
-.wordmark-sep{color:var(--fg3);font-weight:300}
-.topbar-status{display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:var(--green);font-family:var(--mono)}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
-.topbar-right{display:flex;align-items:center;gap:1rem}
-.clock{font-family:var(--mono);font-size:.72rem;color:var(--fg2);letter-spacing:.02em}
-.nav-link{font-size:.72rem;color:var(--fg2);text-decoration:none;cursor:pointer;background:none;border:none;display:inline-flex;align-items:center;gap:.25rem}
-.nav-link:hover{color:var(--fg)}
-.main{max-width:840px;margin:0 auto;padding:3rem 2rem 6rem;display:flex;flex-direction:column;gap:1.5rem}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2rem}
-.card-hdr{padding-bottom:1.25rem;border-bottom:1px solid var(--border);margin-bottom:1.25rem}
-.card-title{font-size:1.15rem;font-weight:500;letter-spacing:-.02em;color:var(--fg)}
-.card-title span{color:var(--amber)}
-.card-sub{font-size:.78rem;color:var(--fg2);margin-top:.2rem}
-.info-grid{display:flex;flex-direction:column;gap:.75rem}
-.info-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.5rem 0}
-.info-row+.info-row{border-top:1px solid var(--border)}
-.info-label{font-size:.67rem;text-transform:uppercase;letter-spacing:.08em;color:var(--fg3);font-weight:500}
-.info-value{font-family:var(--mono);font-size:.8rem;color:var(--fg);text-align:right;word-break:break-all}
-.info-value.amber{color:var(--amber)}
-.badge{font-family:var(--mono);font-size:.6rem;font-weight:500;padding:.15rem .45rem;border-radius:3px;background:var(--green-d);color:var(--green);border:1px solid rgba(61,186,110,.2)}
-.summary{display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden}
-.summary-item{flex:1;padding:.875rem 1.25rem;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:.2rem}
-.summary-item:last-child{border-right:none}
-.s-label{font-size:.67rem;text-transform:uppercase;letter-spacing:.08em;color:var(--fg3);font-weight:500}
-.s-val{font-family:var(--mono);font-size:1.15rem;font-weight:500;color:var(--fg);line-height:1}
-.s-val.amber{color:var(--amber)}
-section{display:flex;flex-direction:column;gap:.625rem}
-.section-label{font-size:.67rem;text-transform:uppercase;letter-spacing:.1em;color:var(--fg3);font-weight:500;display:flex;align-items:center;gap:.75rem}
-.section-label::after{content:'';flex:1;height:1px;background:var(--border)}
-.foot{display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap;padding-top:1.5rem;border-top:1px solid var(--border)}
-.foot-copy{font-size:.7rem;color:var(--fg2);font-family:var(--mono)}
-.foot-copy a{text-decoration:none;color:inherit}
-@media(max-width:640px){
-  .topbar{padding:0 1rem}
-  .main{padding:2rem 1rem 4rem}
-  .summary{flex-direction:column}
-  .summary-item{border-right:none;border-bottom:1px solid var(--border)}
-  .info-row{flex-direction:column;align-items:flex-start;gap:.25rem}
-  .info-value{text-align:left;width:100%}
-}
-@media(max-width:480px){
-  .topbar-right .clock{display:none}
-  .summary-item{padding:.75rem 1rem}
-}
-</style>
-</head>
-<body>
-<div class="topbar">
-<div class="topbar-left">
-<div class="wordmark"><a href="/" style="color:inherit;text-decoration:none">egress-proxy</a><span class="wordmark-sep">/</span><span>heroku</span></div>
-<div class="topbar-status"><span class="dot"></span>operational</div>
-</div>
-<div class="topbar-right">
-<span class="clock" id="clock"></span>
-<a href="/resolve" class="nav-link">resolver</a>
-<a href="/health" class="nav-link">health</a>
-<button id="theme-btn" class="nav-link" aria-label="Toggle theme">
-<svg class="theme-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-<svg class="theme-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-</button>
-<a href="/resolve" class="nav-link">resolver</a>
-<a href="/health" class="nav-link">health</a>
-<a href="https://github.com/mosabbir-maruf/Egress-Proxy" target="_blank" rel="noopener" class="nav-link" aria-label="GitHub"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a>
-</div>
-</div>
-<div class="main">
-<div class="card">
-<div class="card-hdr">
-<h1 class="card-title">Egress <span>Proxy</span></h1>
-<div class="card-sub">Nitro CDN relay · DoodStream resolver</div>
-</div>
-<div class="info-grid">
-<div class="info-row"><span class="info-label">Endpoint</span><span class="info-value"><span class="badge">/?url=</span></span></div>
-<div class="info-row"><span class="info-label">Status</span><span class="info-value"><span class="badge">Active</span></span></div>
-<div class="info-row"><span class="info-label">Runtime</span><span class="info-value amber">Persistent process</span></div>
-<div class="info-row"><span class="info-label">Usage</span><span class="info-value">Manifest + segments</span></div>
-<div class="info-row" style="border-top:1px solid var(--border);margin-top:.25rem;padding-top:.75rem"><span class="info-label">Resolver</span><span class="info-value"><span class="badge">POST /api/resolve</span></span></div>
-<div class="info-row"><span class="info-label">Resolve Auth</span><span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">X-Proxy-Key</span>' : '<span class="badge" style="background:rgba(192,57,43,0.1);color:#c0392b;border-color:rgba(192,57,43,0.2)">missing key</span>'}</span></div>
-<div class="info-row"><span class="info-label">Test</span><span class="info-value"><a href="/resolve" class="nav-link" style="font-size:.7rem;text-decoration:underline;color:var(--amber)">/resolve →</a></span></div>
-</div>
-</div>
-<section>
-<div class="section-label">summary</div>
-<div class="summary">
-<div class="summary-item"><span class="s-label">Allowed Hosts</span><span class="s-val amber">${ALLOWED_BASE.length}</span></div>
-<div class="summary-item"><span class="s-label">Key Required</span><span class="s-val">${REQUIRED_KEY ? "Yes" : "No"}</span></div>
-<div class="summary-item"><span class="s-label">Header timeout</span><span class="s-val">${Math.round(UPSTREAM_HEADER_TIMEOUT_MS / 1000)}s</span></div>
-</div>
-</section>
-<section>
-<div class="section-label">environment</div>
-<div class="card" style="padding:0">
-<div class="info-grid" style="padding:1.25rem 1.5rem">
-<div class="info-row"><span class="info-label"><code style="font-family:var(--mono);font-size:.72rem;color:var(--fg);background:var(--bg);padding:.1rem .35rem;border-radius:3px;border:1px solid var(--border)">EGRESS_PROXY_KEY</code></span><span class="info-value">${REQUIRED_KEY ? '<span class="badge" style="background:var(--green-d);color:var(--green);border-color:rgba(61,186,110,.2)">set</span>' : '<span style="color:var(--fg3)">not set</span>'}</span></div>
-<div class="info-row"><span class="info-label"><code style="font-family:var(--mono);font-size:.72rem;color:var(--fg);background:var(--bg);padding:.1rem .35rem;border-radius:3px;border:1px solid var(--border)">PROXY_ALLOWED_DOMAINS</code></span><span class="info-value"><span style="font-family:var(--mono);font-size:.72rem;color:var(--fg3)">extra domains via csv</span></span></div>
-    </div>
-    </section>
-    <footer class="foot">
-    <span class="foot-copy">&copy; 2026 <a href="https://github.com/mosabbir-maruf/" target="_blank" rel="noopener">Mosabbir Maruf</a> &middot; <a href="https://github.com/mosabbir-maruf/Egress-Proxy" target="_blank" rel="noopener">Egress-Proxy</a></span>
-    </footer>
-    </div>
-    <script>
-    (function(){var p=String.prototype.padStart.bind;function t(){var n=new Date();document.getElementById("clock").textContent=(n.getUTCHours()<10?"0":"")+n.getUTCHours()+":"+(n.getUTCMinutes()<10?"0":"")+n.getUTCMinutes()+":"+(n.getUTCSeconds()<10?"0":"")+n.getUTCSeconds()+" UTC"}t();setInterval(t,1e3)})();
-    (function(){var b=document.getElementById("theme-btn");if(!b)return;var k="egress-proxy-theme";function s(d){document.documentElement.classList.toggle("dark",d);var u=b.querySelector(".theme-sun"),m=b.querySelector(".theme-moon");if(u)u.style.display=d?"none":"";if(m)m.style.display=d?"":"none";try{localStorage.setItem(k,d?"dark":"light")}catch(e){}}var v;try{v=localStorage.getItem(k)}catch(e){};if(v==="dark"||v===null)s(true);else if(v==="light")s(false);b.addEventListener("click",function(){s(!document.documentElement.classList.contains("dark"))})    })();
-    </script>
-</body>
-</html>`;
-
-const RESOLVE_PAGE = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex, nofollow">
-<title>DoodStream Resolver</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
-<style>
-:root{--bg:#f7f5f1;--surface:#eeebe6;--border:#d4d0c8;--fg:#1c1a16;--fg2:#5c5850;--fg3:#9a958c;--amber:#a06c0c;--green:#1f7a44;--green-d:rgba(31,122,68,0.1);--mono:'Geist Mono','JetBrains Mono',monospace}
-.dark{--bg:#0c0b09;--surface:#131210;--border:#252320;--fg:#e8e4dc;--fg2:#b5afae;--fg3:#7a7670;--amber:#e8a020;--green:#3dba6e;--green-d:rgba(61,186,110,0.1)}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Geist','Inter',system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-.topbar{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:48px}
-.topbar-left{display:flex;align-items:center;gap:1.25rem}
-.wordmark{font-family:var(--mono);font-size:.8rem;font-weight:500;color:var(--fg);display:flex;align-items:center;gap:.5rem}
-.wordmark-sep{color:var(--fg3);font-weight:300}
-.topbar-status{display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:var(--green);font-family:var(--mono)}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
-.topbar-right{display:flex;align-items:center;gap:1rem}
-.nav-link{font-size:.72rem;color:var(--fg2);text-decoration:none;cursor:pointer;background:none;border:none;display:inline-flex;align-items:center;gap:.25rem;padding:.25rem .5rem;border-radius:4px}
-.nav-link:hover{color:var(--fg);background:var(--green-d)}
-.nav-link.active{color:var(--amber)}
-.main{max-width:960px;margin:0 auto;padding:2rem 2rem 4rem;display:flex;flex-direction:column;gap:1.25rem}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1.5rem}
-.card-inline{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
-.foot{display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap;padding-top:1.5rem;border-top:1px solid var(--border)}
-.foot-copy{font-size:.7rem;color:var(--fg2);font-family:var(--mono)}
-.foot-copy a{text-decoration:none;color:inherit}
-.badge{font-family:var(--mono);font-size:.6rem;font-weight:500;padding:.15rem .45rem;border-radius:3px;background:var(--green-d);color:var(--green);border:1px solid rgba(61,186,110,.2)}
-.info-grid{display:grid;grid-template-columns:auto 1fr;gap:.5rem .75rem;align-items:center}
-.info-label{font-size:.67rem;text-transform:uppercase;letter-spacing:.08em;color:var(--fg3);font-weight:500}
-.info-value{font-family:var(--mono);font-size:.78rem;color:var(--fg);word-break:break-all}
-.btn{padding:.35rem 1rem;font-family:var(--mono);font-size:.72rem;border:1px solid var(--amber);border-radius:4px;background:var(--amber);color:#fff;cursor:pointer;white-space:nowrap}
-.btn:disabled{opacity:.5;cursor:default}
-.btn-copy{padding:.25rem .6rem;font-size:.65rem;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--fg2);cursor:pointer}
-.btn-copy:hover{background:var(--green-d);border-color:var(--green);color:var(--green)}
-input{font-family:var(--mono);font-size:.78rem}
-.player-wrap{aspect-ratio:16/9;background:#000;border-radius:4px;overflow:hidden}
-.player-wrap video{width:100%;height:100%;display:block}
-#error-msg{color:var(--amber)}
-@media(max-width:640px){
-  .topbar{padding:0 1rem}
-  .main{padding:1.5rem 1rem 3rem}
-  .info-grid{grid-template-columns:1fr}
-}
-</style>
-</head>
-<body>
-<div class="topbar">
-<div class="topbar-left">
-<div class="wordmark"><a href="/" style="color:inherit;text-decoration:none">egress-proxy</a><span class="wordmark-sep">/</span><span>doodstream</span></div>
-<div class="topbar-status" id="status-dot"><span class="dot"></span>ready</div>
-</div>
-<div class="topbar-right">
-<a href="/" class="nav-link">Dashboard</a>
-<a href="/resolve" class="nav-link active">Resolver</a>
-<a href="/health" class="nav-link">Health</a>
-<a href="https://github.com/mosabbir-maruf/Egress-Proxy" target="_blank" rel="noopener" class="nav-link" aria-label="GitHub"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg></a>
-</div>
-</div>
-<div class="main">
-<div class="card">
-<div class="card-inline">
-<input id="vid-input" type="text" placeholder="Video ID (e.g. 02n3dhf9fvqu)" value="02n3dhf9fvqu"
-  style="flex:1;min-width:200px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);outline:none">
-<input id="key-input" type="password" placeholder="X-Proxy-Key"
-  style="flex:1;min-width:160px;padding:.35rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);outline:none;font-size:.7rem">
-<button id="resolve-btn" class="btn">Resolve</button>
-<span id="status-text" style="font-family:var(--mono);font-size:.72rem;color:var(--fg3)"></span>
-</div>
-</div>
-
-<div id="result-area" style="display:none">
-<div class="card" style="padding:0">
-<div class="info-grid" style="padding:1.25rem 1.5rem">
-<div class="info-label">Title</div><div class="info-value" id="r-title" style="font-size:.82rem">—</div>
-<div class="info-label">Direct Link</div>
-<div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
-  <span class="info-value" id="r-direct-link" style="font-size:.7rem">—</span>
-  <button class="btn-copy" onclick="copy('r-direct-link')">Copy</button>
-</div>
-<div class="info-label">Proxy Link</div>
-<div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
-  <span class="info-value" id="r-proxy-link" style="font-size:.7rem">—</span>
-  <button class="btn-copy" onclick="copy('r-proxy-link')">Copy</button>
-</div>
-<div class="info-label">Referer</div><div class="info-value" id="r-referer" style="font-size:.7rem">—</div>
-<div class="info-label">Size</div><div class="info-value" id="r-size">—</div>
-</div>
-</div>
-
-<div class="card" style="padding:0">
-<div class="player-wrap" id="player-wrap">
-  <video id="video-player" controls playsinline preload="metadata"></video>
-</div>
-</div>
-</div>
-
-<div id="error-area" style="display:none">
-<div class="card"><p id="error-msg"></p></div>
-</div>
-</div>
-<footer class="foot">
-<span class="foot-copy">&copy; 2026 <a href="https://github.com/mosabbir-maruf/" target="_blank" rel="noopener">Mosabbir Maruf</a></span>
-</footer>
-<script>
-(function(){var b=document.querySelector(".topbar-right");if(!b)return;var k="egress-proxy-theme";function s(d){document.documentElement.classList.toggle("dark",d)}var v;try{v=localStorage.getItem(k)}catch(e){};if(v==="dark"||v===null)s(true);else if(v==="light")s(false);})();
-(function(){
-var btn=document.getElementById("resolve-btn"),inp=document.getElementById("vid-input"),keyInp=document.getElementById("key-input"),status=document.getElementById("status-text"),stDot=document.getElementById("status-dot");
-function $(i){return document.getElementById(i)}
-function show(id){$(id).style.display=""}
-function hide(id){$(id).style.display="none"}
-function txt(id,t){$(id).textContent=t}
-function copy(id){
-  var el=$(id);
-  if(!el||!el.textContent)return;
-  navigator.clipboard.writeText(el.textContent).then(function(){
-    var b=el.parentElement.querySelector(".btn-copy");
-    if(b){var o=b.textContent;b.textContent="Copied!";setTimeout(function(){b.textContent=o},1500)}
-  }).catch(function(){});
-}
-function run(){
-  var id=inp.value.trim();
-  if(!id)return;
-  hide("result-area");hide("error-area");
-  status.textContent="Resolving...";stDot.innerHTML='<span class="dot" style="background:var(--amber)"></span>loading';
-  btn.disabled=true;btn.textContent="...";
-  var key=keyInp.value.trim();
-  var headers={"Content-Type":"application/json"};
-  if(key)headers["X-Proxy-Key"]=key;
-  fetch("/api/resolve",{method:"POST",headers:headers,body:JSON.stringify({videoId:id})})
-  .then(function(r){return r.json()})
-  .then(function(d){
-    if(d.directLink){
-      txt("r-title",d.title||id);
-      txt("r-direct-link",d.directLink);
-      var proxy=(window.location.origin||"")+"/?url="+encodeURIComponent(d.directLink)+"&referer="+encodeURIComponent(d.referer||"");
-      if(key)proxy+="&key="+encodeURIComponent(key);
-      txt("r-proxy-link",proxy);
-      txt("r-referer",d.referer||"—");
-      txt("r-size",d.contentLength?(parseInt(d.contentLength)/1048576).toFixed(1)+" MB":"—");
-      show("result-area");
-      var video=document.getElementById("video-player");
-      video.src=d.directLink;
-      video.load();
-      status.textContent="Ready";stDot.innerHTML='<span class="dot"></span>ready';
-    }else{
-      txt("error-msg",d.error||"Unknown error");
-      show("error-area");
-      status.textContent="Failed";stDot.innerHTML='<span class="dot" style="background:#c00"></span>error';
-    }
-  })
-  .catch(function(e){txt("error-msg",e.message);show("error-area");status.textContent="Error";stDot.innerHTML='<span class="dot" style="background:#c00"></span>error'})
-  .finally(function(){btn.disabled=false;btn.textContent="Resolve"});
-}
-btn.addEventListener("click",run);
-inp.addEventListener("keydown",function(e){if(e.key==="Enter")run()});
-})();
-</script>
-</body>
-</html>`;
-
 const server = http.createServer(async (req, res) => {
   const t0 = Date.now();
   let target = "";
@@ -559,6 +281,11 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/health" || pathname === "/healthz") {
       res.writeHead(200, CT_JSON);
       res.end(JSON_OK);
+      return;
+    }
+
+    if (pathname === "/api/config") {
+      sendJson(res, 200, CONFIG_JSON);
       return;
     }
 

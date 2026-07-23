@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
-import https from "node:https";
+import http2 from "node:http2";
+import tls from "node:tls";
 import { timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { URL } from "node:url";
@@ -53,7 +54,7 @@ if (PROXY_ALLOWED_EXTRA) {
   }
 }
 
-// --- Chrome TLS fingerprint for doodstream CDN domains ---
+// --- HTTP/2 with Chrome TLS fingerprint for doodstream CDN domains ---
 const SSL_OP_TLSEXT_PADDING = 1 << 4;
 const SSL_OP_NO_ENCRYPT_THEN_MAC = 1 << 19;
 
@@ -75,12 +76,21 @@ const CHROME_CIPHERS = [
   'AES256-SHA',
 ].join(':');
 
+const CHROME_H2_SETTINGS = {
+  headerTableSize: 65536,
+  enablePush: false,
+  initialWindowSize: 6291456,
+  maxFrameSize: 16384,
+  maxConcurrentStreams: 1000,
+  maxHeaderListSize: 262144,
+};
+
 function chromeTlsOptions(hostname) {
   return {
     host: hostname,
     port: 443,
     servername: hostname,
-    ALPNProtocols: ['http/1.1'],
+    ALPNProtocols: ['h2', 'http/1.1'],
     ciphers: CHROME_CIPHERS,
     sigalgs: 'ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512',
     ecdhCurve: 'X25519:prime256v1:secp384r1',
@@ -90,37 +100,65 @@ function chromeTlsOptions(hostname) {
   };
 }
 
-const CHROME_PROXY_HOSTS = ['cloudatacdn.com', 'cloudadsts.com', 'cloudadus.com'];
+const h2Sessions = new Map();
 
-function fetchWithChromeTls(urlStr, { headers, signal } = {}) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(urlStr);
-    const req = https.request({
-      hostname: url.hostname,
-      port: 443,
-      path: url.pathname + url.search,
-      method: 'GET',
-      headers,
-      ...chromeTlsOptions(url.hostname),
-    }, (res) => {
-      resolve({
-        status: res.statusCode,
-        headers: res.headers,
-        body: res,
-        ok: res.statusCode >= 200 && res.statusCode < 300,
-      });
-    });
-    req.on('error', reject);
-    if (signal) {
-      signal.addEventListener('abort', () => req.destroy(), { once: true });
-    }
-    req.end();
+function getH2Session(origin) {
+  if (h2Sessions.has(origin)) {
+    const s = h2Sessions.get(origin);
+    if (!s.closed && !s.destroyed) return s;
+    h2Sessions.delete(origin);
+  }
+  const url = new URL(origin);
+  const session = http2.connect(origin, {
+    settings: CHROME_H2_SETTINGS,
+    createConnection: () => tls.connect(chromeTlsOptions(url.hostname)),
   });
+  session.on('error', () => h2Sessions.delete(origin));
+  session.on('close', () => h2Sessions.delete(origin));
+  h2Sessions.set(origin, session);
+  return session;
 }
+
+const CHROME_PROXY_HOSTS = ['cloudatacdn.com', 'cloudadsts.com', 'cloudadus.com'];
 
 function needsChromeTls(hostname) {
   const h = normalizeHost(hostname);
   return CHROME_PROXY_HOSTS.some(d => h === d || h.endsWith('.' + d));
+}
+
+function fetchWithChromeH2(urlStr, { headers, signal } = {}) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const origin = url.origin;
+    const session = getH2Session(origin);
+    const req = session.request({
+      ':method': 'GET',
+      ':path': url.pathname + url.search,
+      ':authority': url.host,
+      ':scheme': 'https',
+      ...Object.fromEntries(
+        Object.entries(headers || {}).map(([k, v]) => [k.toLowerCase(), String(v)])
+      ),
+    });
+    req.on('response', (responseHeaders) => {
+      const status = responseHeaders[':status'];
+      const outHeaders = {};
+      for (const [k, v] of Object.entries(responseHeaders)) {
+        if (!k.startsWith(':')) outHeaders[k] = Array.isArray(v) ? v.join(', ') : String(v);
+      }
+      resolve({
+        status,
+        headers: outHeaders,
+        body: req,
+        ok: status >= 200 && status < 300,
+      });
+    });
+    req.on('error', reject);
+    if (signal) {
+      signal.addEventListener('abort', () => { req.close(); }, { once: true });
+    }
+    req.end();
+  });
 }
 // ---------------------------------------------------------
 
@@ -307,7 +345,7 @@ async function fetchAllowedTarget(target, { method, headers, body, signal }) {
 
   for (let redirects = 0; ; redirects += 1) {
     const upstream = useChrome
-      ? await fetchWithChromeTls(currentUrl, { headers, signal })
+      ? await fetchWithChromeH2(currentUrl, { headers, signal })
       : await fetch(currentUrl, {
           method: currentMethod,
           headers,
